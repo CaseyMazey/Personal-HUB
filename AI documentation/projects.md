@@ -1,6 +1,6 @@
 # Projects.md
 
-Version: 1.0
+Version: 1.1
 
 ---
 
@@ -291,11 +291,13 @@ Der Projektwald dient ausschließlich der Visualisierung.
 
 Er ersetzt nicht die normale Projektübersicht.
 
+Implementiert in `forest.js` (Projektwald-Ansicht, Projektdetailseite) und `project-tree.js` (reine SVG-Baum-Engine) — nicht in `projects.js`, das nur die Kartenübersicht rendert.
+
 ---
 
 # Projektbaum
 
-Der Projektbaum befindet sich aktuell in Entwicklung.
+Die SVG-Baum-Engine (`project-tree.js`) ist bereits funktional vollständig: mehrere Stamm- und Astvarianten, deterministisch pro Projekt-ID generiert. Was laut README noch als "in Entwicklung" gilt, ist in erster Linie die UX-Feinabstimmung, nicht die grundlegende Darstellung.
 
 Er bildet den Fortschritt eines Projekts als Baum ab.
 
@@ -397,20 +399,13 @@ Alle Daten werden lokal gespeichert.
 
 # Zuständigkeiten
 
-projects.js ist verantwortlich für:
+Der Bereich ist auf drei Dateien aufgeteilt:
 
-- Projektverwaltung
-- Aufgabenverwaltung
-- Unterprojekte
-- Fortschrittsberechnung
-- Archiv
-- Detailansicht
-- Projektstatistik
-- Projektwald
-- Projektbaum
-- Modalfenster
-- Inline-Bearbeitung
-- Verschieben von Aufgaben
+- **projects.js** — Kartenübersicht, Projektverwaltung, Aufgabenverwaltung, Unterprojekte, Fortschrittsberechnung, Archiv, Projektstatistik, Modalfenster, Inline-Bearbeitung, Verschieben von Aufgaben
+- **forest.js** — Projektwald-Ansicht und Projektdetailseite (Hero, Informationskarte, Aufgabenbereich)
+- **project-tree.js** — reine SVG-Baum-Engine (kein eigener State), von forest.js verwendet
+
+`projects.js` greift auf `currentDetailProject`/`renderProjectDetail()` aus `forest.js` zu, um nach dem Speichern ggf. die Detailseite neu zu rendern — das ist die einzige direkte Verbindung zwischen den Dateien.
 
 Nicht verantwortlich für:
 

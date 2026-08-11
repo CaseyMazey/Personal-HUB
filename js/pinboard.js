@@ -59,6 +59,12 @@ function migrateDeskCardsIfNeeded() {
 
   deskCards = cards;
   saveDeskCards();
+
+  // Alt-Keys sind ab hier nur noch Migrationsquelle — nichts im Code liest
+  // oder schreibt sie danach noch. Nach erfolgreicher Migration aufräumen,
+  // statt sie als Datenmüll in localStorage liegen zu lassen.
+  ['notes', 'generalTodos', 'berichtsheft', 'shoppingList', 'customTiles', 'tileDesigns']
+    .forEach(k => localStorage.removeItem(k));
 }
 migrateDeskCardsIfNeeded();
 

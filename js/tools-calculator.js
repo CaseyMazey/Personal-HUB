@@ -60,6 +60,7 @@ function calcResetExpressionIfNeeded() {
 }
 
 function calcInputDigit(digit) {
+  if (calcState.display === 'Fehler') calcClear();
   calcResetExpressionIfNeeded();
   if (calcState.waitingForOperand) {
     calcState.display = digit;
@@ -72,6 +73,7 @@ function calcInputDigit(digit) {
 }
 
 function calcInputDecimal() {
+  if (calcState.display === 'Fehler') calcClear();
   calcResetExpressionIfNeeded();
   if (calcState.waitingForOperand) {
     calcState.display = '0,';
@@ -90,18 +92,21 @@ function calcClear() {
 }
 
 function calcToggleSign() {
+  if (calcState.display === 'Fehler') return;
   const val = calcDisplayToNumber();
   calcState.display = calcNumberToDisplay(val * -1);
   renderCalcDisplay();
 }
 
 function calcPercent() {
+  if (calcState.display === 'Fehler') return;
   const val = calcDisplayToNumber();
   calcState.display = calcNumberToDisplay(val / 100);
   renderCalcDisplay();
 }
 
 function calcSetOperator(nextOperator) {
+  if (calcState.display === 'Fehler') return;
   calcResetExpressionIfNeeded();
   const inputValue = calcDisplayToNumber();
 
@@ -151,15 +156,18 @@ function calcApplyOperator(a, b, op) {
   if (op === '+') return a + b;
   if (op === '−') return a - b;
   if (op === '×') return a * b;
-  if (op === '÷') return b === 0 ? 0 : a / b;
+  if (op === '÷') return b === 0 ? NaN : a / b;
   return b;
 }
 
 function calcDisplayToNumber() {
-  return parseFloat(calcState.display.replace(',', '.')) || 0;
+  return parseGermanNumber(calcState.display) || 0;
 }
 
 function calcNumberToDisplay(num) {
+  // Division durch 0 (oder andere ungültige Operationen) liefert NaN —
+  // wie bei einem echten Taschenrechner als "Fehler" anzeigen statt 0.
+  if (isNaN(num)) return 'Fehler';
   // Rundung gegen Float-Ungenauigkeiten, danach Punkt → Komma für die Anzeige.
   const rounded = Math.round(num * 1e10) / 1e10;
   return String(rounded).replace('.', ',');

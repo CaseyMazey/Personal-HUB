@@ -1001,10 +1001,7 @@ function getTreeLevels() {
 function getTreeStage(ks) {
   const levels = getTreeLevels();
   if (ks === null || ks < 0) return levels[0];
-  for (let i = levels.length - 1; i >= 0; i--) {
-    if (ks >= levels[i].min) return levels[i];
-  }
-  return levels[0];
+  return stageFromThresholds(ks, levels);
 }
 
 // Alias für Mini-Bar-Rendering (braucht alle Level)
@@ -1240,13 +1237,16 @@ const FINANZBAUM_SVGS = {
 function buildFinanzbaumSvg(stage) {
   return FINANZBAUM_SVGS[stage] || FINANZBAUM_SVGS.seed;
 }
+const GOAL_STAGE_THRESHOLDS = [
+  { min: 0,   stage: 'seed' },
+  { min: 20,  stage: 'sprout' },
+  { min: 40,  stage: 'small_plant' },
+  { min: 60,  stage: 'medium_plant' },
+  { min: 80,  stage: 'large_plant' },
+  { min: 100, stage: 'flowering' },
+];
 function getGoalStage(pct) {
-  if (pct >= 100) return 'flowering';
-  if (pct >= 80)  return 'large_plant';
-  if (pct >= 60)  return 'medium_plant';
-  if (pct >= 40)  return 'small_plant';
-  if (pct >= 20)  return 'sprout';
-  return 'seed';
+  return stageFromThresholds(pct, GOAL_STAGE_THRESHOLDS).stage;
 }
 
 // Plant-type emoji map

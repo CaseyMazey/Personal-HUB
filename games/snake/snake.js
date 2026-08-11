@@ -79,8 +79,9 @@
     stop();
 
     const all = DB.get('gameHighscores', {});
-    // Altes Format war eine reine Zahl — nicht-destruktiv migrieren.
-    const prev = typeof all.snake === 'number' ? { best: all.snake, totalGames: 0 } : (all.snake || { best: 0, totalGames: 0 });
+    // Migrations-/Lese-Logik lebt zentral in manifest.js (readSnakeStats),
+    // das vor snake.js lädt — nicht hier nochmal duplizieren.
+    const prev = readSnakeStats(all);
 
     const isNew = state.score > (prev.best || 0);
     all.snake = {

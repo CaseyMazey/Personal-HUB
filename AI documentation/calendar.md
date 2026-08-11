@@ -1,6 +1,6 @@
 # Calendar.md
 
-Version: 1.0
+Version: 1.1
 
 ---
 
@@ -131,6 +131,7 @@ Optional:
 - Countdown
 - Enddatum
 - Wiederholung
+- Sichtbarkeit in Terminlisten ("In Agenda anzeigen")
 
 Termine können bearbeitet und gelöscht werden.
 

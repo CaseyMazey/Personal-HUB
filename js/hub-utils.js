@@ -15,6 +15,25 @@
 // Millisekunden pro Tag — zentrale Konstante statt verstreuter 86400000-Literale
 const MS_PER_DAY = 86400000;
 
+// Deutsches Komma als Dezimaltrennzeichen in eine Zahl umwandeln (z.B. für
+// Taschenrechner-Display, Notenmanager-Eingaben). Liefert NaN bei ungültigem
+// Text — bewusst kein Fallback auf 0, das entscheidet jeder Aufrufer selbst.
+function parseGermanNumber(str) {
+  return parseFloat(String(str).replace(',', '.'));
+}
+
+// Generischer "größter Schwellenwert ≤ Wert"-Lookup für Stufen-/Stage-Systeme
+// (z.B. Finanzbaum-Wachstumsstufen, Sparziel-Pflanzenstufen). thresholds ist
+// eine aufsteigend sortierte Liste; getMin liest den Schwellenwert aus einem
+// Eintrag (Default: .min-Property). Gibt den Eintrag mit dem größten
+// Schwellenwert <= value zurück, sonst den ersten Eintrag als Fallback.
+function stageFromThresholds(value, thresholds, getMin = t => t.min) {
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (value >= getMin(thresholds[i])) return thresholds[i];
+  }
+  return thresholds[0];
+}
+
 // =========================
 // 1) FARBSYSTEM
 // =========================

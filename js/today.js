@@ -106,7 +106,7 @@ function weatherCodeToSvg(code) {
 }
 
 // =========================
-// WEATHER — OpenWeatherMap API
+// WEATHER — Open-Meteo API (kein API-Key nötig)
 // Settings: GPS oder manuelle Stadt
 // =========================
 
@@ -158,16 +158,20 @@ async function renderWeather() {
   // Show loading state
   if (iconEl) iconEl.innerHTML = WEATHER_SVGS.unknown;
 
-  // Cache: 30 Minuten — only use if svgCode present (invalidates old emoji cache)
+  weatherSettings = DB.get('weatherSettings', { mode: 'manual', city: 'Cologne' });
+  const locKey = weatherSettings.mode === 'gps' ? 'gps' : `city:${(weatherSettings.city || 'Cologne').toLowerCase()}`;
+
+  // Cache: 30 Minuten — nur nutzen, wenn svgCode vorhanden ist (invalidiert alten
+  // Emoji-Cache) UND der Cache vom selben Standort stammt. Ohne locKey-Check
+  // würde ein Standortwechsel bis zu 30 Min. lang noch die Werte des alten
+  // Orts anzeigen.
   const saved = DB.get('weatherData', null);
-  if (saved && saved.svgCode && Date.now() - saved.ts < 30*60*1000) {
+  if (saved && saved.svgCode && saved.locKey === locKey && Date.now() - saved.ts < 30*60*1000) {
     if (iconEl) iconEl.innerHTML = saved.svgCode;
     tempEl.textContent = saved.temp;
     descEl.textContent = saved.desc;
     return;
   }
-
-  weatherSettings = DB.get('weatherSettings', { mode: 'manual', city: 'Cologne' });
 
   try {
     let data;
@@ -180,7 +184,7 @@ async function renderWeather() {
       const city = weatherSettings.city || 'Cologne';
       data = await fetchWeatherByCity(city);
     }
-    DB.set('weatherData', { ...data, ts: Date.now() });
+    DB.set('weatherData', { ...data, ts: Date.now(), locKey });
     if (iconEl) iconEl.innerHTML = data.svgCode;
     tempEl.textContent = data.temp;
     descEl.textContent = data.desc;
@@ -252,37 +256,6 @@ document.getElementById('next-week').addEventListener('click', () => {
   state.currentDate.setDate(state.currentDate.getDate() + 7); updateHeader(); renderView(currentView);
 });
 document.getElementById('exam-pill').addEventListener('click', openCountdownModal);
-
-// =========================
-// CLOCK WIDGET (Header — bleibt für settings.js Kompatibilität)
-// =========================
-
-let clockInterval = null;
-
-function startClock() {
-  stopClock();
-  renderClock();
-  clockInterval = setInterval(renderClock, 1000);
-}
-
-function stopClock() {
-  if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
-  const w = document.getElementById('clock-widget');
-  if (w) { w.innerHTML = ''; w.style.display = 'none'; }
-}
-
-function renderClock() {
-  const w = document.getElementById('clock-widget');
-  if (!w) return;
-  w.style.display = 'block';
-  const now = new Date();
-  w.innerHTML = '';
-  w.className = 'clock-digital';
-  const h = String(now.getHours()).padStart(2,'0');
-  const m = String(now.getMinutes()).padStart(2,'0');
-  const s = String(now.getSeconds()).padStart(2,'0');
-  w.textContent = `${h}:${m}:${s}`;
-}
 
 // =========================
 // SIDEBAR CLOCK PANEL

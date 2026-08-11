@@ -1,6 +1,6 @@
 # Budget.md
 
-Version: 1.0
+Version: 1.1
 
 ---
 
@@ -24,6 +24,8 @@ Budget soll:
 - wiederkehrende Zahlungen verwalten
 - einmalige Ausgaben organisieren
 - Sparziele motivierend darstellen
+- Schulden und Raten getrennt von Sparzielen abbilden
+- jedem Euro eine klare Zuordnung geben (Finanzierung)
 - die aktuelle finanzielle Situation verständlich erklären
 - einen ruhigen, stressfreien Überblick bieten
 
@@ -49,7 +51,21 @@ Stattdessen:
 
 ---
 
-# Dashboard
+# Sub-Tabs
+
+Budget ist in fünf Sub-Tabs unterteilt:
+
+1. Übersicht
+2. Finanzierung
+3. Prognose (Sparplaner)
+4. Sparpläne
+5. Schulden
+
+Diese Struktur soll erhalten bleiben.
+
+---
+
+# Dashboard (Übersicht)
 
 Das Dashboard besteht aus mehreren Bereichen:
 
@@ -154,6 +170,8 @@ Die Liquiditätsvorschau zeigt:
 
 Dadurch lässt sich früh erkennen, ob ausreichend Geld vorhanden sein wird.
 
+Die Vorschau rechnet bewusst immer ab dem heutigen Tag, unabhängig davon, welcher Monat gerade in der Übersicht angezeigt wird — sie beantwortet "reicht mein Geld ab jetzt", nicht "reichte es in einem beliebig gewählten Monat".
+
 ---
 
 # Finanzgarten
@@ -165,6 +183,8 @@ Jedes Sparziel besitzt eine Pflanze.
 Je näher das Ziel erreicht wird, desto weiter wächst die Pflanze.
 
 Unterstützt werden verschiedene Pflanzenarten.
+
+Zusätzlich zu den Sparziel-Pflanzen wächst ein eigener Finanzbaum mit dem Kontostand — er zeigt unabhängig von einzelnen Sparzielen, wie gesund die Gesamtfinanzen gerade wirken.
 
 Der Finanzgarten dient ausschließlich der Motivation.
 
@@ -180,7 +200,79 @@ Ein Sparziel besitzt mindestens:
 - Pflanze
 - Emoji
 
+Optional zusätzlich:
+
+- Priorität (Muss/Brauche/Möchte)
+- Kategorie
+- Beschreibung
+- Startdatum und Wunschtermin
+- Finanzierungsquellen
+
 Budget berechnet automatisch den Fortschritt.
+
+---
+
+# Finanzierung — "Jedem Euro einen Job"
+
+Der Finanzierung-Sub-Tab ist die zentrale Engine, über die Einnahmen konkreten Verbrauchern (Sparzielen, Schulden, wiederkehrenden und einmaligen Ausgaben) zugeordnet werden.
+
+Jede Zuordnung besteht aus:
+
+- einer Einnahmequelle
+- einem Betrag
+- einem Verbraucher (Sparziel, Schuld oder Ausgabe)
+
+Dadurch lässt sich für jede Einnahme nachvollziehen, wofür sie eingeplant ist, und für jeden Verbraucher, woher sein Geld kommt.
+
+Ein interaktiver Geldfluss-Planer (Drag & Drop) erlaubt es, Einnahmen direkt auf ihre Verbraucher zu ziehen oder per Klick zuzuweisen, inklusive Kapazitätsgrenzen je Karte.
+
+Die Finanzierung ersetzt keine Buchhaltung — sie bleibt eine Planungshilfe, keine Nachverfolgung tatsächlicher Kontobewegungen.
+
+---
+
+# Sparprognose (Prognose-Sub-Tab)
+
+Die Sparprognose berechnet aus den wiederkehrenden Posten drei mögliche monatliche Sparraten:
+
+- 🔒 Garantiert – nur feste, sichere Beträge
+- 📊 Realistisch – inkl. Durchschnitt variabler Posten
+- 🚀 Optimistisch – bester Fall
+
+Jeder wiederkehrende Posten kann einzeln von der Sparplan-Berechnung ausgeschlossen werden.
+
+## Zeitstrahl
+
+Zeigt anhand des gewählten Szenarios, wann Sparziele voraussichtlich erreicht werden.
+
+## Was-wäre-wenn?
+
+Simulator zum Durchspielen einer frei wählbaren monatlichen Sparrate, ohne das eigentliche Szenario zu verändern.
+
+Die Sparprognose ist bewusst von den Sparplänen getrennt: Sie beantwortet "was ist realistisch möglich", während Sparpläne konkrete, vom Nutzer festgelegte Vorhaben sind (siehe unten).
+
+---
+
+# Sparpläne (Sparpläne-Sub-Tab)
+
+Sparpläne sind eigenständige, vom Nutzer angelegte Sparvorhaben mit Zielbetrag, Zieldatum und Spar-Methode.
+
+Ein Sparplan kann optional mit einem bestehenden Sparziel verknüpft werden, ist aber kein Pflichtbestandteil eines Sparziels.
+
+Sparpläne bestehen aus einzelnen Einträgen (Einzahlungen), über die der tatsächliche Fortschritt nachvollzogen wird.
+
+---
+
+# Schulden & Raten (Schulden-Sub-Tab)
+
+Schulden und Raten werden bewusst getrennt von Sparzielen verwaltet — strukturell ähnlich (Betrag, Fortschritt, Finanzierung), aber mit anderer Bedeutung: eine Schuld wird **getilgt**, nicht **gespart**.
+
+Eine Schuld besitzt mindestens:
+
+- Name
+- Gesamtbetrag
+- bereits getilgter Betrag
+
+Wie bei Sparzielen kann auch eine Schuld über die Finanzierung-Engine aus Einnahmen bedient werden.
 
 ---
 
@@ -301,19 +393,6 @@ sein.
 
 ---
 
-# Sparziele
-
-Mehrere Sparziele können gleichzeitig verwaltet werden.
-
-Für jedes Ziel werden angezeigt:
-
-- Fortschritt
-- Prozent
-- aktueller Betrag
-- Zielbetrag
-
----
-
 # Finanztipp
 
 Am unteren Ende des Dashboards erscheint ein wechselnder Finanztipp.
@@ -340,6 +419,9 @@ Budget speichert unter anderem:
 - Prioritäten
 - Zahlungsstatus
 - Sparziele
+- Schulden/Raten
+- Finanzierungszuordnungen
+- Sparpläne
 - Pflanzen
 - Monatsdaten
 - Finanzgarten-Einstellungen
@@ -350,13 +432,25 @@ Alle Daten werden lokal gespeichert.
 
 # Zuständigkeiten
 
-budget.js ist verantwortlich für:
+Budget ist auf mehrere Dateien aufgeteilt, die zusammen den Sub-Tab-Verbund bilden (feste Ladereihenfolge):
+
+- **budget.js** — Datenmodell-Kern, Monatsverwaltung, Berechnungen, Übersicht-Rendering, Finanzgarten, Sub-Tab-Switcher
+- **budget-sparziele.js** — Rendering der Sparziele (Datenquelle bleibt budgetGoals aus budget.js)
+- **budget-financing.js** — Finanzierungs-/Reservierungs-Engine ("Jedem Euro einen Job"), gemeinsamer Funding-Editor
+- **budget-debts.js** — Schulden/Raten
+- **budget-analysis.js** — Geldfluss-Planer (Drag & Drop)
+- **budget-sparprognose.js** — Sparprognose (Szenarien, Zeitstrahl, Was-wäre-wenn)
+- **budget-sparplaene.js** — Sparpläne (eigenständige Spar-Vorhaben mit Einträgen)
+
+Zusammen sind sie verantwortlich für:
 
 - Monatsverwaltung
 - Berechnungen
 - Einnahmen
 - Ausgaben
 - Sparziele
+- Schulden/Raten
+- Finanzierung
 - Finanzstatus
 - Liquiditätsberechnung
 - Finanzgarten
@@ -382,6 +476,9 @@ Budget verwaltet:
 - Einnahmen
 - Ausgaben
 - Sparziele
+- Schulden/Raten
+- Finanzierungszuordnungen (funding)
+- Sparpläne
 - Prioritäten
 - Zahlungsstatus
 - Pflanzen
@@ -390,6 +487,8 @@ Budget verwaltet:
 Andere Module dürfen diese Daten lesen.
 
 Budget bleibt die einzige Quelle für Finanzdaten.
+
+Hinweis: Der Finanzgarten (Finanzbaum + Sparziel-Pflanzen) lebt vollständig innerhalb von Budget. Er hat keine Verbindung zum Projektwald (Projekte-Tab, `forest.js`/`project-tree.js`) — beide sind unabhängig entstandene, ähnliche Wachstums-Visualisierungen für unterschiedliche Daten.
 
 ---
 
@@ -406,6 +505,8 @@ Neue Funktionen sollen:
 ✔ motivierend wirken
 
 ✔ bestehende Daten kompatibel halten
+
+✔ die Finanzierungs-Engine wiederverwenden statt eigene Zuordnungslogik zu erfinden
 
 Neue Funktionen sollen nicht:
 
@@ -446,3 +547,4 @@ Bei Änderungen an Budget gelten folgende Regeln:
 - Die Oberfläche bleibt ruhig, freundlich und leicht verständlich.
 - Bestehende Finanzdaten müssen kompatibel bleiben.
 - Motivation und Übersicht haben Vorrang vor Funktionsvielfalt.
+- Änderungen am Geldfluss-Planer (budget-analysis.js) besonders sorgfältig testen — dort sind in der Vergangenheit mehrfach subtile Bugs rund um Drag & Drop und doppelte Funding-Einträge aufgetreten (siehe `testing-geldfluss.md`).

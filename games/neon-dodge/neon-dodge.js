@@ -1596,8 +1596,16 @@ function handleCanvasClick(x, y){
   // Main Menu
   if (showMainMenu){
     if (y > 220 && y < 260) { // Neues Spiel
-      showMainMenu = false;
-      reset();
+      // Gleiche Sicherheitsabfrage wie im Hauptmenü-Button (menuButtons[0].action)
+      // — verhindert, dass laufender Fortschritt (Zeit/Coins/Perma-Boni) hier
+      // stillschweigend verloren geht, während der Hauptmenü-Pfad nachfragt.
+      if (t > 0 || stats.coins > 0 || perma.speed > 0 || perma.hitbox > 0 || perma.boost > 0){
+        confirmNewGame = true;
+        showMainMenu = false;
+      } else {
+        showMainMenu = false;
+        reset();
+      }
     }
     if (y > 260 && y < 300) { // Fortsetzen
       showMainMenu = false;

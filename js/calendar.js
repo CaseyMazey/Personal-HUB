@@ -437,11 +437,10 @@ function openEventModal(key, day, existingEvent = null, editCtx = null) {
   updateRecurCustomVisibility();
 
   // Hide time row for multi-day events (bestehende Logik)
-  const endDateEl  = document.getElementById('event-modal-enddate-input');
-  const timeRow    = document.getElementById('event-modal-time-row');
-  endDateEl.addEventListener('change', () => {
-    timeRow.style.display = endDateEl.value ? 'none' : '';
-  }, { once: false });
+  // Der change-Listener, der das umsetzt, ist bereits einmalig am
+  // Skript-Top-Level registriert (siehe unten) — hier nur den initialen
+  // Anzeigezustand setzen, keinen zweiten Listener pro Modal-Öffnung anhängen.
+  const timeRow = document.getElementById('event-modal-time-row');
   timeRow.style.display = (existingEvent?.endDate) ? 'none' : '';
 
   document.getElementById('event-modal-overlay').classList.remove('hidden');

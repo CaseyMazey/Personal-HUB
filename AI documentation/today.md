@@ -1,6 +1,6 @@
 # Today.md
 
-Version: 1.0
+Version: 1.1
 
 ---
 
@@ -43,14 +43,13 @@ Der Today-Tab besteht aus folgenden Bereichen:
 1. Begrüßungsheader
 2. Zeitblöcke
 3. Aufgaben
-4. Informationskacheln
-5. Rechte Sidebar
+4. Rechte Sidebar
 
 Diese Struktur soll grundsätzlich erhalten bleiben.
 
----
+Hinweis: Freie Informationskacheln (Wichtiges, Fragen, Berichtsheft, To-Do, Einkaufsliste, benutzerdefinierte Kacheln) gehörten früher zu Today, sind aber inzwischen ein eigener Tab — siehe Abschnitt "Verschoben nach Pinnwand".
 
-# Komponenten
+---
 
 ## Begrüßungsheader
 
@@ -98,25 +97,6 @@ Aufgaben können:
 - Priorität besitzen
 - mehreren Blöcken zugeordnet sein
 - Notizen enthalten
-
----
-
-## Informationskacheln
-
-Die Kacheln dienen als flexible Informationsfläche.
-
-Es existieren feste und benutzerdefinierte Kacheln.
-
-Beispiele:
-
-- Wichtiges
-- Fragen
-- Berichtsheft
-- To Do
-- Einkaufsliste
-- Begriffe
-
-Benutzer können zusätzlich eigene Kacheln erstellen.
 
 ---
 
@@ -181,64 +161,18 @@ Nicht als Aufgabenverwaltung.
 
 ---
 
-# Berichtsheft
+# Verschoben nach Pinnwand
 
-Besteht aus:
+Folgende Bereiche gehörten ursprünglich zu Today, wurden aber in einen eigenständigen Pinnwand-Tab ausgelagert (siehe README: "früher Teil von 'Heute', jetzt ein eigener Tab mit mehr Platz"):
 
-- Betrieb
-- Berufsschule
+- Informationskacheln (freie Kartenfläche)
+- Berichtsheft (Betrieb/Berufsschule)
+- To-Do
+- Einkaufsliste
+- Wichtiges, Fragen für den Unterricht, Begriffe & Definitionen
+- benutzerdefinierte Kacheln inkl. Kachel-Designer (Hintergrundfarbe, Washi Tape, Büroklammer, abgeknickte Ecke)
 
-Speichert Texte automatisch.
-
----
-
-# To-Do
-
-Einfache persönliche Aufgaben.
-
-Nicht identisch mit Projektaufgaben.
-
-Nicht identisch mit Kalenderaufgaben.
-
----
-
-# Einkaufsliste
-
-Unabhängig von allen anderen Modulen.
-
-Soll bewusst einfach bleiben.
-
----
-
-# Benutzerdefinierte Kacheln
-
-Nutzer können:
-
-- neue Kacheln erstellen
-- Listen
-- Freitext
-
-Jede Kachel besitzt:
-
-- Titel
-- Typ
-- Farbe
-- Dekoration
-
----
-
-# Kachel-Designer
-
-Jede Kachel kann individuell gestaltet werden.
-
-Unterstützt:
-
-- Hintergrundfarbe
-- Washi Tape
-- Büroklammer
-- abgeknickte Ecke
-
-Diese Anpassungen sind rein optisch.
+Today besitzt hierfür keine eigene Logik mehr. Neue Kartentypen oder Kachel-artige Funktionen gehören in die Pinnwand, nicht in Today.
 
 ---
 
@@ -254,7 +188,6 @@ today.js ist verantwortlich für:
 - Schnellnotizen
 - Mini-Kalender
 - Sidebar
-- Benutzerdefinierte Kacheln
 
 Nicht verantwortlich für:
 
@@ -263,6 +196,7 @@ Nicht verantwortlich für:
 - Projekte
 - Spiele
 - Bibliothek
+- Pinnwand (freie Karten, Berichtsheft, To-Do, Einkaufsliste, benutzerdefinierte Kacheln — siehe `pinboard.js`)
 
 ---
 
@@ -289,6 +223,8 @@ Neue Features sollen nicht:
 ✖ die Sidebar überladen
 
 ✖ mehr als eine zusätzliche Hauptsektion hinzufügen
+
+✖ freie Karten/Kacheln zurück nach Today verlagern (gehören zur Pinnwand)
 
 ---
 
@@ -321,7 +257,6 @@ Geplante Erweiterungen:
 Hier dürfen neue Widgets ergänzt werden:
 
 - rechte Sidebar
-- Informationskacheln
 - Header
 
 Hier dürfen keine Widgets ergänzt werden:

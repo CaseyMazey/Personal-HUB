@@ -305,15 +305,12 @@ function initPetCard() {
   const slot = document.getElementById('games-pet-card-slot');
   if (!slot) return;
 
-  // Cozy Home (noch) nicht geladen → Slot leer lassen, kein Fehler
+  // Cozy Home (noch) nicht geladen → Slot leer lassen, kein Fehler.
+  // window.cozyHome wird erst gesetzt, wenn der Nutzer Cozy Home zum ersten
+  // Mal öffnet (mount()) — statt dauerhaft zu pollen, einmalig auf das
+  // 'cozyhome:ready'-Event warten, das cozy-home.js dann feuert.
   if (!window.cozyHome) {
-    // Warten bis cozyHome verfügbar ist (Manifest lädt async)
-    const waitInterval = setInterval(() => {
-      if (window.cozyHome) {
-        clearInterval(waitInterval);
-        initPetCard();
-      }
-    }, 300);
+    document.addEventListener('cozyhome:ready', () => initPetCard(), { once: true });
     return;
   }
 

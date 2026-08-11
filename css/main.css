@@ -956,22 +956,6 @@ ul { list-style: none; }
 
 #task-empty { padding: 22px 18px; font-size: 13px; color: var(--text-3); }
 #task-empty.hidden { display: none; }
-
-/* Clock widget */
-.clock-digital {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: 3px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 9px 18px;
-  min-width: 130px;
-  text-align: center;
-  box-shadow: var(--shadow-xs);
-}
 .clock-analog { display: flex; align-items: center; justify-content: center; }
 
 /* =============================================================

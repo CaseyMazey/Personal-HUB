@@ -1408,6 +1408,11 @@
         _onUpdate: null
     };
 
+    // Signalisiert dem Games Hub (Sidebar-Pet-Karte), dass window.cozyHome jetzt
+    // verfügbar ist — spart dort das dauerhafte Polling, bis der Nutzer Cozy
+    // Home zum ersten Mal öffnet.
+    document.dispatchEvent(new Event('cozyhome:ready'));
+
     window.registerGame({
         id: "cozy-home",
         modalSize: "very-big",

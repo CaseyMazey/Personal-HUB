@@ -168,6 +168,24 @@ document.getElementById('backup-import-btn').addEventListener('click', () => {
   document.getElementById('backup-file-input').click();
 });
 
+// Grundtyp-Prüfung für Keys, deren App-Code eine feste Struktur voraussetzt
+// (z.B. main.js: tasks.filter(...)). Ein syntaktisch gültiges, aber
+// strukturell falsches Backup (z.B. tasks als String) würde diese sonst
+// ungeprüft überschreiben und die App beim nächsten Laden zum Absturz
+// bringen — betroffene Keys werden stattdessen übersprungen.
+const BACKUP_SHAPE_CHECKS = {
+  tasks:           Array.isArray,
+  events:          v => v !== null && typeof v === 'object' && !Array.isArray(v),
+  eventSeries:     Array.isArray,
+  subjects:        Array.isArray,
+  projects:        Array.isArray,
+  budgetRecurring: Array.isArray,
+  budgetOnetime:   Array.isArray,
+  budgetGoals:     Array.isArray,
+  budgetDebts:     Array.isArray,
+  deskCards:       Array.isArray,
+};
+
 document.getElementById('backup-file-input').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -175,11 +193,18 @@ document.getElementById('backup-file-input').addEventListener('change', e => {
     try {
       const data = JSON.parse(ev.target.result);
       if (!confirm('Alle aktuellen Daten werden mit dem Backup überschrieben. Fortfahren?')) return;
+      const skipped = [];
       Object.keys(data).forEach(k => {
         if (k === '__version' || k === '__exported') return;
+        const check = BACKUP_SHAPE_CHECKS[k];
+        if (check && !check(data[k])) { skipped.push(k); return; }
         localStorage.setItem(k, JSON.stringify(data[k]));
       });
-      alert('Backup erfolgreich wiederhergestellt. Die Seite wird neu geladen.');
+      if (skipped.length) {
+        alert('Backup wiederhergestellt, aber folgende Daten hatten eine unerwartete Struktur und wurden übersprungen: ' + skipped.join(', ') + '. Die Seite wird neu geladen.');
+      } else {
+        alert('Backup erfolgreich wiederhergestellt. Die Seite wird neu geladen.');
+      }
       location.reload();
     } catch { alert('Ungültige Backup-Datei.'); }
   };

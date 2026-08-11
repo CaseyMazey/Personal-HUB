@@ -45,36 +45,50 @@ function recordAnswer(knew){
 }
 
 // =========================
+// LEITNER — geteilte Berechnungen
+// calcDueCount/calcAccuracy nehmen eine flache Kartenliste, damit Global-,
+// Fach- und Gruppen-Ebene dieselbe Logik nutzen statt sie zu duplizieren.
+// =========================
+
+const LEITNER_INTERVALS = [0,1,2,4,8];
+
+function allCards(){
+  return subjects.flatMap(subj => subj.groups.flatMap(g => g.cards));
+}
+
+function calcDueCount(cards){
+  return cards.filter(c => {
+    const box = c.box||1;
+    const last = c.lastSeen ? c.lastSeen.slice(0,10) : null;
+    const daysAgo = last ? Math.floor((Date.now() - new Date(last))/MS_PER_DAY) : 999;
+    return daysAgo >= LEITNER_INTERVALS[box-1];
+  }).length;
+}
+
+function calcAccuracy(cards){
+  let total=0, correct=0;
+  cards.forEach(c => { if(c.totalAnswers){ total+=c.totalAnswers; correct+=(c.correctAnswers||0); } });
+  return total ? Math.round((correct/total)*100) : 0;
+}
+
+// =========================
 // GLOBAL STATS
 // =========================
 
 function calcGlobalStats(){
-  let total=0, dueToday=0, hardCards=0;
-  const today = getTodayStr();
-  subjects.forEach(subj => subj.groups.forEach(g => g.cards.forEach(c => {
-    total++;
-    if(c.hard) hardCards++;
-    const box = c.box||1;
-    const last = c.lastSeen ? c.lastSeen.slice(0,10) : null;
-    const daysAgo = last ? Math.floor((Date.now() - new Date(last))/MS_PER_DAY) : 999;
-    const intervals = [0,1,2,4,8];
-    if(daysAgo >= intervals[box-1]) dueToday++;
-  })));
+  const cards = allCards();
+  const hardCards = cards.filter(c => c.hard).length;
+  const dueToday = calcDueCount(cards);
   const stats = getSessionStats();
   const today2 = getTodayStr();
   const todayLearned = stats.date === today2 ? stats.learned : 0;
   const todayReps = stats.date === today2 ? (stats.reps||0) : 0;
   const streak = getStreak();
-  return { total, dueToday, todayLearned, todayReps, hardCards, streak: streak.streak };
+  return { total: cards.length, dueToday, todayLearned, todayReps, hardCards, streak: streak.streak };
 }
 
 function calcGlobalAccuracy(){
-  let total=0, correct=0;
-  subjects.forEach(subj => subj.groups.forEach(g => g.cards.forEach(c => {
-    if(c.totalAnswers){ total+=c.totalAnswers; correct+=(c.correctAnswers||0); }
-  })));
-  if(!total) return 0;
-  return Math.round((correct/total)*100);
+  return calcAccuracy(allCards());
 }
 
 function renderGlobalStats(){
@@ -251,22 +265,11 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') closeAllMenus()
 // =========================
 
 function calcSubjectDue(subj){
-  const intervals=[0,1,2,4,8]; let due=0;
-  subj.groups.forEach(g => g.cards.forEach(c => {
-    const box=c.box||1, last=c.lastSeen?c.lastSeen.slice(0,10):null;
-    const daysAgo=last?Math.floor((Date.now()-new Date(last))/MS_PER_DAY):999;
-    if(daysAgo>=intervals[box-1]) due++;
-  }));
-  return due;
+  return calcDueCount(subj.groups.flatMap(g => g.cards));
 }
 
 function calcSubjectAccuracy(subj){
-  let total=0, correct=0;
-  subj.groups.forEach(g => g.cards.forEach(c => {
-    if(c.totalAnswers){ total+=c.totalAnswers; correct+=(c.correctAnswers||0); }
-  }));
-  if(!total) return 0;
-  return Math.round((correct/total)*100);
+  return calcAccuracy(subj.groups.flatMap(g => g.cards));
 }
 
 function renderSubjectDetail(){
@@ -380,20 +383,11 @@ function renderGroupList(subj){
 }
 
 function calcGroupDue(group){
-  const intervals=[0,1,2,4,8]; let due=0;
-  group.cards.forEach(c => {
-    const box=c.box||1, last=c.lastSeen?c.lastSeen.slice(0,10):null;
-    const daysAgo=last?Math.floor((Date.now()-new Date(last))/MS_PER_DAY):999;
-    if(daysAgo>=intervals[box-1]) due++;
-  });
-  return due;
+  return calcDueCount(group.cards);
 }
 
 function calcGroupAccuracy(group){
-  let total=0, correct=0;
-  group.cards.forEach(c => { if(c.totalAnswers){ total+=c.totalAnswers; correct+=(c.correctAnswers||0); } });
-  if(!total) return 0;
-  return Math.round((correct/total)*100);
+  return calcAccuracy(group.cards);
 }
 
 // =========================

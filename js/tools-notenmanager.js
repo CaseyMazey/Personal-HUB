@@ -100,6 +100,11 @@ function notenFormatGrade(n) {
   return n.toFixed(2).replace('.', ',');
 }
 
+// Note auf den gültigen Bereich 1–6 begrenzen (deutsche Notenskala).
+function notenClampGrade(n) {
+  return Math.min(6, Math.max(1, n));
+}
+
 // Kompakte Notation für Fachnoten in den Zeugnis-Karten — ganze Noten
 // ohne Nachkommastellen (z.B. "2" statt "2,00"), Kommazahlen gekürzt.
 function notenFormatGradeShort(n) {
@@ -552,8 +557,9 @@ function closeNotenEntryModal() {
 function saveNotenEntry() {
   const date       = document.getElementById('noten-entry-date').value;
   const categoryId = document.getElementById('noten-entry-category').value;
-  const gradeRaw   = document.getElementById('noten-entry-grade').value.trim();
-  const grade      = gradeRaw === '' ? null : Math.min(6, Math.max(1, parseFloat(gradeRaw.replace(',', '.'))));
+  const gradeRaw    = document.getElementById('noten-entry-grade').value.trim();
+  const gradeParsed = gradeRaw === '' ? null : parseGermanNumber(gradeRaw);
+  const grade       = (gradeParsed === null || isNaN(gradeParsed)) ? null : notenClampGrade(gradeParsed);
   const weight     = Math.max(0.5, parseFloat(document.getElementById('noten-entry-weight').value) || 1);
 
   if (notenEntryEditId) {
@@ -709,7 +715,9 @@ function saveNotenReport() {
   const grades = {};
   document.querySelectorAll('.noten-report-grade-input').forEach(input => {
     const raw = input.value.trim();
-    if (raw !== '') grades[input.dataset.subjectId] = Math.min(6, Math.max(1, parseFloat(raw.replace(',', '.'))));
+    if (raw === '') return;
+    const parsed = parseGermanNumber(raw);
+    if (!isNaN(parsed)) grades[input.dataset.subjectId] = notenClampGrade(parsed);
   });
 
   if (notenReportEditId) {
