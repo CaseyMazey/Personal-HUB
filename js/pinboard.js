@@ -258,19 +258,20 @@ function wireDeskResize(handle, card, cardEl) {
 
 // ---- Eintrag zu einer Checklisten-Karte hinzufügen (nutzt das bestehende Notiz-Modal) ----
 let deskAddItemCardId = null;
+const noteModal = wireModal('note-modal-overlay', {
+  closeIds: ['note-modal-close', 'note-modal-cancel'],
+  onClose: () => { deskAddItemCardId = null; },
+});
 function openAddItemModal(cardId) {
   deskAddItemCardId = cardId;
   const card = deskCards.find(c => c.id === cardId); if (!card) return;
   document.getElementById('note-modal-title').textContent = `${card.title} — Eintrag hinzufügen`;
   document.getElementById('note-modal-input').value = '';
-  document.getElementById('note-modal-overlay').classList.remove('hidden');
+  noteModal.open();
   setTimeout(() => document.getElementById('note-modal-input').focus(), 50);
 }
-function closeAddItemModal() { document.getElementById('note-modal-overlay').classList.add('hidden'); deskAddItemCardId = null; }
+function closeAddItemModal() { noteModal.close(); }
 
-document.getElementById('note-modal-close').addEventListener('click', closeAddItemModal);
-document.getElementById('note-modal-cancel').addEventListener('click', closeAddItemModal);
-document.getElementById('note-modal-overlay').addEventListener('click', e => { if (e.target === document.getElementById('note-modal-overlay')) closeAddItemModal(); });
 document.getElementById('note-modal-save').addEventListener('click', () => {
   const text = document.getElementById('note-modal-input').value.trim();
   if (!text || !deskAddItemCardId) return;
@@ -288,6 +289,10 @@ const deskColorWidget = initColorPickerWidget(
   { pickerId: 'tile-modal-color', previewId: 'tile-modal-color-preview', addBtnId: 'tile-modal-color-add-btn', libraryId: 'tile-modal-color-library' },
   { initial: HUB_PALETTE_HEX[0] }
 );
+const tileModal = wireModal('tile-modal-overlay', {
+  closeIds: ['tile-modal-close', 'tile-modal-cancel'],
+  onClose: () => { editingDeskCardId = null; },
+});
 
 function openDeskCardModal(cardId) {
   editingDeskCardId = cardId || null;
@@ -321,15 +326,12 @@ function openDeskCardModal(cardId) {
   if (card) { orderRow.style.display = ''; updateDeskMoveButtons(card); }
   else { orderRow.style.display = 'none'; }
 
-  document.getElementById('tile-modal-overlay').classList.remove('hidden');
+  tileModal.open();
   setTimeout(() => document.getElementById('tile-modal-title').focus(), 50);
 }
-function closeDeskCardModal() { document.getElementById('tile-modal-overlay').classList.add('hidden'); editingDeskCardId = null; }
+function closeDeskCardModal() { tileModal.close(); }
 
 document.getElementById('add-tile-btn').addEventListener('click', () => openDeskCardModal(null));
-document.getElementById('tile-modal-close').addEventListener('click', closeDeskCardModal);
-document.getElementById('tile-modal-cancel').addEventListener('click', closeDeskCardModal);
-document.getElementById('tile-modal-overlay').addEventListener('click', e => { if (e.target === document.getElementById('tile-modal-overlay')) closeDeskCardModal(); });
 
 document.querySelectorAll('.tile-type-btn').forEach(btn => {
   btn.addEventListener('click', () => {

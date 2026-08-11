@@ -368,6 +368,22 @@ document.getElementById('event-modal-color-reset').addEventListener('click', () 
 //   { scope:'series',     series }           → gesamte Serie bearbeiten
 // =========================
 
+const eventModal = wireModal('event-modal-overlay', {
+  closeIds: ['event-modal-close', 'event-modal-cancel'],
+  inputId: 'event-modal-input',
+  saveId: 'event-modal-save',
+  onClose: () => {
+    state.editingEvent = null;
+    eventModalTarget   = null;
+    eventModalEditCtx  = null;
+    document.getElementById('event-modal-recur-select').disabled = false;
+    document.getElementById('event-modal-date-input').disabled = false;
+    document.getElementById('event-modal-countdown').closest('.modal-row-inline').style.display = '';
+    document.getElementById('event-modal-enddate-input').closest('.modal-row').style.display = '';
+    document.getElementById('event-modal-recur-locked-hint').style.display = 'none';
+  },
+});
+
 function openEventModal(key, day, existingEvent = null, editCtx = null) {
   state.editingEvent = existingEvent ? { key, event: existingEvent } : null;
   eventModalTarget   = { key, day };
@@ -443,31 +459,13 @@ function openEventModal(key, day, existingEvent = null, editCtx = null) {
   const timeRow = document.getElementById('event-modal-time-row');
   timeRow.style.display = (existingEvent?.endDate) ? 'none' : '';
 
-  document.getElementById('event-modal-overlay').classList.remove('hidden');
+  eventModal.open();
   setTimeout(() => document.getElementById('event-modal-input').focus(), 50);
 }
 
 function closeEventModal() {
-  document.getElementById('event-modal-overlay').classList.add('hidden');
-  state.editingEvent = null;
-  eventModalTarget   = null;
-  eventModalEditCtx  = null;
-  document.getElementById('event-modal-recur-select').disabled = false;
-  document.getElementById('event-modal-date-input').disabled = false;
-  document.getElementById('event-modal-countdown').closest('.modal-row-inline').style.display = '';
-  document.getElementById('event-modal-enddate-input').closest('.modal-row').style.display = '';
-  document.getElementById('event-modal-recur-locked-hint').style.display = 'none';
+  eventModal.close();
 }
-
-document.getElementById('event-modal-close').addEventListener('click', closeEventModal);
-document.getElementById('event-modal-cancel').addEventListener('click', closeEventModal);
-document.getElementById('event-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('event-modal-overlay')) closeEventModal();
-});
-document.getElementById('event-modal-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter')  document.getElementById('event-modal-save').click();
-  if (e.key === 'Escape') closeEventModal();
-});
 
 // Hide time field when end date is set
 document.getElementById('event-modal-enddate-input').addEventListener('change', e => {
@@ -479,7 +477,7 @@ function finishEventModalSave() {
   if (currentView === 'calendar') renderCalendar();
   if (typeof renderMiniCal === 'function') renderMiniCal();
   updateCountdown();
-  document.getElementById('cal-day-modal-overlay').classList.add('hidden');
+  calDayModal.close();
 }
 
 document.getElementById('event-modal-save').addEventListener('click', () => {
@@ -636,22 +634,20 @@ document.getElementById('cal-add-event-btn').addEventListener('click', () => {
 // =========================
 
 let scopeModalCtx = null; // { ev, occDate, action: 'edit'|'delete' }
+const scopeModal = wireModal('recur-scope-modal-overlay', {
+  closeIds: ['recur-scope-modal-close', 'recur-scope-cancel'],
+  onClose: () => { scopeModalCtx = null; },
+});
 
 function openEditScopeModal(ev, occDate, action) {
   scopeModalCtx = { ev, occDate, action };
   document.getElementById('recur-scope-modal-title').textContent =
     action === 'delete' ? 'Wiederholenden Termin löschen' : 'Wiederholenden Termin bearbeiten';
-  document.getElementById('recur-scope-modal-overlay').classList.remove('hidden');
+  scopeModal.open();
 }
 function closeEditScopeModal() {
-  document.getElementById('recur-scope-modal-overlay').classList.add('hidden');
-  scopeModalCtx = null;
+  scopeModal.close();
 }
-document.getElementById('recur-scope-modal-close').addEventListener('click', closeEditScopeModal);
-document.getElementById('recur-scope-cancel').addEventListener('click', closeEditScopeModal);
-document.getElementById('recur-scope-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('recur-scope-modal-overlay')) closeEditScopeModal();
-});
 
 document.getElementById('recur-scope-this').addEventListener('click', () => {
   const { ev, occDate, action } = scopeModalCtx;
@@ -664,7 +660,7 @@ document.getElementById('recur-scope-this').addEventListener('click', () => {
     saveEventSeries();
     renderCalendar();
     if (typeof renderMiniCal === 'function') renderMiniCal();
-    document.getElementById('cal-day-modal-overlay').classList.add('hidden');
+    calDayModal.close();
   } else {
     openEventModal(dateKey(occDate), occDate, ev, { scope: 'occurrence', series, occDate });
   }
@@ -685,7 +681,7 @@ document.getElementById('recur-scope-following').addEventListener('click', () =>
     saveEventSeries();
     renderCalendar();
     if (typeof renderMiniCal === 'function') renderMiniCal();
-    document.getElementById('cal-day-modal-overlay').classList.add('hidden');
+    calDayModal.close();
   } else {
     openEventModal(dateKey(occDate), occDate, ev, { scope: 'following', series, occDate });
   }
@@ -701,7 +697,7 @@ document.getElementById('recur-scope-all').addEventListener('click', () => {
     saveEventSeries();
     renderCalendar();
     if (typeof renderMiniCal === 'function') renderMiniCal();
-    document.getElementById('cal-day-modal-overlay').classList.add('hidden');
+    calDayModal.close();
   } else {
     openEventModal(series.startDate, parseLocalDate(series.startDate), null, { scope: 'series', series });
   }
@@ -904,6 +900,10 @@ document.getElementById('cal-next').addEventListener('click', () => { calDate.se
 // =========================
 
 let calDayTarget = null;
+const calDayModal = wireModal('cal-day-modal-overlay', {
+  closeIds: ['cal-day-modal-close'],
+  onClose: () => { calDayTarget = null; },
+});
 
 function openCalDayModal(key, date) {
   calDayTarget = { key, date };
@@ -1006,14 +1006,10 @@ function openCalDayModal(key, date) {
     });
   }
 
-  document.getElementById('cal-day-modal-overlay').classList.remove('hidden');
+  calDayModal.open();
 }
 
-function closeCalDayModal() { document.getElementById('cal-day-modal-overlay').classList.add('hidden'); calDayTarget = null; }
-document.getElementById('cal-day-modal-close').addEventListener('click', closeCalDayModal);
-document.getElementById('cal-day-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('cal-day-modal-overlay')) closeCalDayModal();
-});
+function closeCalDayModal() { calDayModal.close(); }
 document.getElementById('cal-day-add-event').addEventListener('click', () => {
   if (!calDayTarget) return;
   const { key, date } = calDayTarget;
@@ -1025,8 +1021,11 @@ document.getElementById('cal-day-add-event').addEventListener('click', () => {
 // COUNTDOWN MODAL
 // =========================
 
-function openCountdownModal()  { renderCountdownList(); document.getElementById('countdown-modal-overlay').classList.remove('hidden'); }
-function closeCountdownModal() { document.getElementById('countdown-modal-overlay').classList.add('hidden'); }
+const countdownModal = wireModal('countdown-modal-overlay', {
+  closeIds: ['countdown-modal-close'],
+});
+function openCountdownModal()  { renderCountdownList(); countdownModal.open(); }
+function closeCountdownModal() { countdownModal.close(); }
 
 function renderCountdownList() {
   const list = document.getElementById('countdown-list'); list.innerHTML = '';
@@ -1067,11 +1066,6 @@ function makeCountdownRow(id, title, days) {
   const slider = document.createElement('span'); slider.className = 'toggle-slider';
   lbl.append(cb, slider); row.append(info, lbl); return row;
 }
-
-document.getElementById('countdown-modal-close').addEventListener('click', closeCountdownModal);
-document.getElementById('countdown-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('countdown-modal-overlay')) closeCountdownModal();
-});
 
 // =============================================================
 // =============================================================
@@ -1555,6 +1549,9 @@ function renderCalHolidaysCard() {
 }
 
 // ── Einstellungs-Modal: Bundesland auswählen ─────────────────
+const calSettingsModal = wireModal('calendar-settings-modal-overlay', {
+  closeIds: ['calendar-settings-modal-close', 'calendar-settings-modal-done'],
+});
 document.getElementById('cal-settings-btn')?.addEventListener('click', () => {
   const sel = document.getElementById('calendar-bundesland-select');
   if (sel) sel.value = calendarSettings.bundesland || '';
@@ -1570,16 +1567,11 @@ document.getElementById('cal-settings-btn')?.addEventListener('click', () => {
   if (showDoneTasksEl) showDoneTasksEl.checked = calendarSettings.showDoneTasks;
   if (reminderEl)       reminderEl.value       = String(calendarSettings.birthdayReminderDays);
 
-  document.getElementById('calendar-settings-modal-overlay')?.classList.remove('hidden');
+  calSettingsModal.open();
 });
 function closeCalSettingsModal() {
-  document.getElementById('calendar-settings-modal-overlay')?.classList.add('hidden');
+  calSettingsModal.close();
 }
-document.getElementById('calendar-settings-modal-close')?.addEventListener('click', closeCalSettingsModal);
-document.getElementById('calendar-settings-modal-done')?.addEventListener('click', closeCalSettingsModal);
-document.getElementById('calendar-settings-modal-overlay')?.addEventListener('click', e => {
-  if (e.target === document.getElementById('calendar-settings-modal-overlay')) closeCalSettingsModal();
-});
 document.getElementById('calendar-bundesland-select')?.addEventListener('change', e => {
   calendarSettings.bundesland = e.target.value || null;
   saveCalendarSettings();
@@ -1751,21 +1743,20 @@ function clearBirthdayForm() {
   });
 }
 
+const birthdayModal = wireModal('birthday-modal-overlay', {
+  closeIds: ['birthday-modal-close', 'birthday-modal-done'],
+  onClose: () => { clearBirthdayForm(); },
+});
+
 function openBirthdayModal() {
   renderBirthdayManageList();
-  document.getElementById('birthday-modal-overlay')?.classList.remove('hidden');
+  birthdayModal.open();
 }
 function closeBirthdayModal() {
-  document.getElementById('birthday-modal-overlay')?.classList.add('hidden');
-  clearBirthdayForm();
+  birthdayModal.close();
 }
 
 document.getElementById('cal-birthdays-manage-btn')?.addEventListener('click', openBirthdayModal);
-document.getElementById('birthday-modal-close')?.addEventListener('click', closeBirthdayModal);
-document.getElementById('birthday-modal-done')?.addEventListener('click', closeBirthdayModal);
-document.getElementById('birthday-modal-overlay')?.addEventListener('click', e => {
-  if (e.target === document.getElementById('birthday-modal-overlay')) closeBirthdayModal();
-});
 
 document.getElementById('birthday-add-btn')?.addEventListener('click', () => {
   const nameEl  = document.getElementById('birthday-name-input');

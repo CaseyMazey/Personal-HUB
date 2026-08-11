@@ -668,7 +668,12 @@ function buildTaskItem(task) {
 // TASK MODAL
 // =========================
 
-const taskOverlay = document.getElementById('modal-overlay');
+const taskModal = wireModal('modal-overlay', {
+  closeIds: ['modal-close', 'modal-cancel'],
+  inputId: 'modal-task-input',
+  saveId: 'modal-save',
+  onClose: () => { state.editingTask = null; },
+});
 
 function openTaskModal(existingTask = null) {
   state.editingTask = existingTask;
@@ -695,25 +700,18 @@ function openTaskModal(existingTask = null) {
     chipsWrap.appendChild(chip);
   });
   document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.prio) === state.selectedPriority));
-  taskOverlay.classList.remove('hidden');
+  taskModal.open();
   setTimeout(() => document.getElementById('modal-task-input').focus(), 50);
 }
-function closeTaskModal() { taskOverlay.classList.add('hidden'); state.editingTask = null; }
+function closeTaskModal() { taskModal.close(); }
 
 document.getElementById('add-task-btn').addEventListener('click', () => openTaskModal());
-document.getElementById('modal-close').addEventListener('click', closeTaskModal);
-document.getElementById('modal-cancel').addEventListener('click', closeTaskModal);
-taskOverlay.addEventListener('click', e => { if (e.target === taskOverlay) closeTaskModal(); });
 
 document.querySelectorAll('.prio-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     state.selectedPriority = Number(btn.dataset.prio);
     document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', b === btn));
   });
-});
-document.getElementById('modal-task-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('modal-save').click();
-  if (e.key === 'Escape') closeTaskModal();
 });
 document.getElementById('modal-save').addEventListener('click', () => {
   const title = document.getElementById('modal-task-input').value.trim(); if (!title) return;

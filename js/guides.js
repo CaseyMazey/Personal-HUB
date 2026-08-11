@@ -945,7 +945,6 @@ function openGuideModal(categoryId, guideId = null) {
   guideModalCategoryId = categoryId;
   guideModalGuideId    = guideId;
 
-  const overlay = document.getElementById('guide-modal-overlay');
   const title   = document.getElementById('guide-modal-title');
   const titleIn = document.getElementById('guide-modal-title-input');
   const descIn  = document.getElementById('guide-modal-desc-input');
@@ -969,14 +968,12 @@ function openGuideModal(categoryId, guideId = null) {
 
   // Reset to editor tab
   setGuideModalTab('editor');
-  overlay.classList.remove('hidden');
+  guideModal.open();
   setTimeout(() => titleIn.focus(), 50);
 }
 
 function closeGuideModal() {
-  document.getElementById('guide-modal-overlay').classList.add('hidden');
-  guideModalCategoryId = null;
-  guideModalGuideId    = null;
+  guideModal.close();
 }
 
 function setGuideModalTab(tab) {
@@ -1013,13 +1010,19 @@ let selectedCatColor = HUB_PALETTE_HEX[0]; // hex string
 function openGuideCatModal() {
   document.getElementById('guide-cat-name-input').value = '';
   if (guideColorWidget) guideColorWidget.setValue(HUB_PALETTE_HEX[0]);
-  document.getElementById('guide-cat-modal-overlay').classList.remove('hidden');
+  guideCatModal.open();
   setTimeout(() => document.getElementById('guide-cat-name-input').focus(), 50);
 }
 
 function closeGuideCatModal() {
-  document.getElementById('guide-cat-modal-overlay').classList.add('hidden');
+  guideCatModal.close();
 }
+
+// Modal-Handles werden einmalig beim ersten initGuides() erzeugt (siehe
+// dort) — bis dahin no-op-Platzhalter, falls open/closeGuideModal vor der
+// Initialisierung aufgerufen werden sollten.
+let guideModal = { open(){}, close(){} };
+let guideCatModal = { open(){}, close(){} };
 
 let _guidesInitialized = false;
 
@@ -1040,11 +1043,10 @@ function initGuides() {
     { initial: HUB_PALETTE_HEX[0], onChange: hex => { selectedCatColor = hex; } }
   );
 
-  // Category modal: close
-  document.getElementById('guide-cat-modal-close').addEventListener('click', closeGuideCatModal);
-  document.getElementById('guide-cat-modal-cancel').addEventListener('click', closeGuideCatModal);
-  document.getElementById('guide-cat-modal-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('guide-cat-modal-overlay')) closeGuideCatModal();
+  guideCatModal = wireModal('guide-cat-modal-overlay', {
+    closeIds: ['guide-cat-modal-close', 'guide-cat-modal-cancel'],
+    inputId: 'guide-cat-name-input',
+    saveId: 'guide-cat-modal-save',
   });
 
   // Category modal: save
@@ -1062,11 +1064,6 @@ function initGuides() {
     renderGuideContent();
   });
 
-  // Category modal: save on Enter in name field
-  document.getElementById('guide-cat-name-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('guide-cat-modal-save').click();
-  });
-
   // Search
   const searchInput = document.getElementById('guide-search-input');
   searchInput.addEventListener('input', () => {
@@ -1082,11 +1079,12 @@ function initGuides() {
   document.getElementById('guide-tab-edit').addEventListener('click', () => setGuideModalTab('editor'));
   document.getElementById('guide-tab-preview').addEventListener('click', () => setGuideModalTab('preview'));
 
-  // Modal close
-  document.getElementById('guide-modal-close').addEventListener('click', closeGuideModal);
-  document.getElementById('guide-modal-cancel').addEventListener('click', closeGuideModal);
-  document.getElementById('guide-modal-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('guide-modal-overlay')) closeGuideModal();
+  // Kein saveId: Titel ist nur eines von mehreren Feldern (inkl. Markdown-
+  // Textarea) — Enter soll hier nichts auslösen, nur Escape schließt.
+  guideModal = wireModal('guide-modal-overlay', {
+    closeIds: ['guide-modal-close', 'guide-modal-cancel'],
+    inputId: 'guide-modal-title-input',
+    onClose: () => { guideModalCategoryId = null; guideModalGuideId = null; },
   });
 
   // Modal save

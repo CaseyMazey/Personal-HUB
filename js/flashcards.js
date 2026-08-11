@@ -394,17 +394,19 @@ function calcGroupAccuracy(group){
 // MODALS: FACH ERSTELLEN
 // =========================
 
+const subjectModal = wireModal('fc-subject-modal-overlay', {
+  closeIds: ['fc-subject-modal-close', 'fc-subject-modal-cancel'],
+  inputId: 'fc-subject-name-input',
+  saveId: 'fc-subject-modal-save',
+});
 function openSubjectModal(){
   document.getElementById('fc-subject-name-input').value = '';
   document.getElementById('fc-subject-teacher-input').value = '';
-  document.getElementById('fc-subject-modal-overlay').classList.remove('hidden');
+  subjectModal.open();
   setTimeout(() => document.getElementById('fc-subject-name-input').focus(), 50);
 }
-function closeSubjectModal(){ document.getElementById('fc-subject-modal-overlay').classList.add('hidden'); }
+function closeSubjectModal(){ subjectModal.close(); }
 
-document.getElementById('fc-subject-modal-close').addEventListener('click', closeSubjectModal);
-document.getElementById('fc-subject-modal-cancel').addEventListener('click', closeSubjectModal);
-document.getElementById('fc-subject-modal-overlay').addEventListener('click', e => { if(e.target===document.getElementById('fc-subject-modal-overlay')) closeSubjectModal(); });
 document.getElementById('fc-subject-modal-save').addEventListener('click', () => {
   const name = document.getElementById('fc-subject-name-input').value.trim();
   const teacher = document.getElementById('fc-subject-teacher-input').value.trim();
@@ -412,7 +414,6 @@ document.getElementById('fc-subject-modal-save').addEventListener('click', () =>
   subjects.push({ id: crypto.randomUUID(), name, teacher, groups: [] });
   saveSubjects(); closeSubjectModal(); renderSubjectList();
 });
-document.getElementById('fc-subject-name-input').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('fc-subject-modal-save').click(); });
 
 // Beide Add-Subject Buttons
 document.getElementById('add-subject-btn').addEventListener('click', openSubjectModal);
@@ -423,19 +424,22 @@ document.getElementById('add-subject-btn-2').addEventListener('click', openSubje
 // =========================
 
 let editingSubjectId = null;
+const subjectEditModal = wireModal('fc-subject-edit-modal-overlay', {
+  closeIds: ['fc-subject-edit-modal-close', 'fc-subject-edit-modal-cancel'],
+  inputId: 'fc-subject-edit-name-input',
+  saveId: 'fc-subject-edit-modal-save',
+  onClose: () => { editingSubjectId = null; },
+});
 
 function openSubjectEditModal(subj){
   editingSubjectId = subj.id;
   document.getElementById('fc-subject-edit-name-input').value = subj.name;
   document.getElementById('fc-subject-edit-teacher-input').value = subj.teacher||'';
-  document.getElementById('fc-subject-edit-modal-overlay').classList.remove('hidden');
+  subjectEditModal.open();
   setTimeout(() => document.getElementById('fc-subject-edit-name-input').focus(), 50);
 }
-function closeSubjectEditModal(){ document.getElementById('fc-subject-edit-modal-overlay').classList.add('hidden'); editingSubjectId=null; }
+function closeSubjectEditModal(){ subjectEditModal.close(); }
 
-document.getElementById('fc-subject-edit-modal-close').addEventListener('click', closeSubjectEditModal);
-document.getElementById('fc-subject-edit-modal-cancel').addEventListener('click', closeSubjectEditModal);
-document.getElementById('fc-subject-edit-modal-overlay').addEventListener('click', e => { if(e.target===document.getElementById('fc-subject-edit-modal-overlay')) closeSubjectEditModal(); });
 document.getElementById('fc-subject-edit-modal-save').addEventListener('click', () => {
   const name = document.getElementById('fc-subject-edit-name-input').value.trim();
   const teacher = document.getElementById('fc-subject-edit-teacher-input').value.trim();
@@ -451,20 +455,23 @@ document.getElementById('fc-subject-edit-modal-save').addEventListener('click', 
 // =========================
 
 let groupModalContext = null; // { subjId, group? }
+const groupModal = wireModal('fc-group-modal-overlay', {
+  closeIds: ['fc-group-modal-close', 'fc-group-modal-cancel'],
+  inputId: 'fc-group-name-input',
+  saveId: 'fc-group-modal-save',
+  onClose: () => { groupModalContext = null; },
+});
 
 function openGroupModal(subjId, existingGroup=null){
   groupModalContext = { subjId, group: existingGroup };
   document.getElementById('fc-group-modal-title').textContent = existingGroup ? 'Themengruppe umbenennen' : 'Neue Themengruppe';
   document.getElementById('fc-group-modal-save').textContent = existingGroup ? 'Speichern' : 'Erstellen';
   document.getElementById('fc-group-name-input').value = existingGroup ? existingGroup.name : '';
-  document.getElementById('fc-group-modal-overlay').classList.remove('hidden');
+  groupModal.open();
   setTimeout(() => document.getElementById('fc-group-name-input').focus(), 50);
 }
-function closeGroupModal(){ document.getElementById('fc-group-modal-overlay').classList.add('hidden'); groupModalContext=null; }
+function closeGroupModal(){ groupModal.close(); }
 
-document.getElementById('fc-group-modal-close').addEventListener('click', closeGroupModal);
-document.getElementById('fc-group-modal-cancel').addEventListener('click', closeGroupModal);
-document.getElementById('fc-group-modal-overlay').addEventListener('click', e => { if(e.target===document.getElementById('fc-group-modal-overlay')) closeGroupModal(); });
 document.getElementById('fc-group-modal-save').addEventListener('click', () => {
   const name = document.getElementById('fc-group-name-input').value.trim();
   if(!name || !groupModalContext) return;
@@ -476,7 +483,6 @@ document.getElementById('fc-group-modal-save').addEventListener('click', () => {
   }
   saveSubjects(); closeGroupModal(); renderGroupList(subj);
 });
-document.getElementById('fc-group-name-input').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('fc-group-modal-save').click(); });
 
 document.getElementById('add-group-btn').addEventListener('click', () => {
   const subj = subjects.find(s => s.id === state.activeSubjectId); if(!subj) return;
@@ -488,6 +494,14 @@ document.getElementById('add-group-btn').addEventListener('click', () => {
 // =========================
 
 let fcModalContext = null;
+// Kein saveId — Vorder-/Rückseite sind Textareas, Enter soll dort einen
+// Zeilenumbruch einfügen, nicht speichern. Escape schließt trotzdem (über
+// inputId), Enter im Feld hat keine Sonderbedeutung.
+const fcModal = wireModal('fc-modal-overlay', {
+  closeIds: ['fc-modal-close', 'fc-modal-cancel'],
+  inputId: 'fc-modal-front',
+  onClose: () => { fcModalContext = null; state.editingCard = null; },
+});
 
 function openFcModal(subjId, groupId, existingCard=null){
   fcModalContext = { subjId, groupId, card: existingCard };
@@ -495,14 +509,11 @@ function openFcModal(subjId, groupId, existingCard=null){
   document.getElementById('fc-modal-title').textContent = existingCard ? 'Karteikarte bearbeiten' : 'Neue Karteikarte';
   document.getElementById('fc-modal-front').value = existingCard ? existingCard.front : '';
   document.getElementById('fc-modal-back').value = existingCard ? existingCard.back : '';
-  document.getElementById('fc-modal-overlay').classList.remove('hidden');
+  fcModal.open();
   setTimeout(() => document.getElementById('fc-modal-front').focus(), 50);
 }
-function closeFcModal(){ document.getElementById('fc-modal-overlay').classList.add('hidden'); fcModalContext=null; state.editingCard=null; }
+function closeFcModal(){ fcModal.close(); }
 
-document.getElementById('fc-modal-close').addEventListener('click', closeFcModal);
-document.getElementById('fc-modal-cancel').addEventListener('click', closeFcModal);
-document.getElementById('fc-modal-overlay').addEventListener('click', e => { if(e.target===document.getElementById('fc-modal-overlay')) closeFcModal(); });
 document.getElementById('fc-modal-save').addEventListener('click', () => {
   const front = document.getElementById('fc-modal-front').value.trim();
   const back = document.getElementById('fc-modal-back').value.trim();

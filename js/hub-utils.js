@@ -355,3 +355,53 @@ window.copyCode = function(btn) {
     setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1800);
   });
 };
+
+// =========================
+// 3) MODAL-HELPER
+// =========================
+// Verkabelt das immer gleiche Modal-Muster (Backdrop-Klick schließt, X/
+// Abbrechen-Buttons schließen, Escape schließt, Enter im Eingabefeld löst
+// Speichern aus), das bisher in jedem Tab von Hand wiederholt wurde.
+// Modul-spezifisches Verhalten (Felder befüllen, State zurücksetzen) bleibt
+// beim Aufrufer über onClose — wireModal kennt nur die Interaktions-Mechanik,
+// nicht den Inhalt des Modals.
+//
+// @param {string} overlayId  ID des *-modal-overlay-Elements
+// @param {object} opts
+//   closeIds  {string[]} IDs von Buttons, die schließen (X, Abbrechen, ...)
+//   onClose   {function} wird bei JEDEM Schließen aufgerufen, unabhängig
+//                        vom Auslöser (Button/Escape/Backdrop-Klick/
+//                        programmatischer close()-Aufruf)
+//   inputId   {string}   Eingabefeld, in dem Enter das Speichern auslöst
+//   saveId    {string}   Button, der bei Enter im inputId-Feld geklickt wird
+//   escCloses {boolean}  Escape im inputId-Feld schließt das Modal (default: true)
+// @returns {{open: function, close: function}}
+function wireModal(overlayId, opts = {}) {
+  const { closeIds = [], onClose, inputId, saveId, escCloses = true } = opts;
+  const overlay = document.getElementById(overlayId);
+  if (!overlay) return { open() {}, close() {} };
+
+  function close() {
+    overlay.classList.add('hidden');
+    if (onClose) onClose();
+  }
+  function open() {
+    overlay.classList.remove('hidden');
+  }
+
+  closeIds.forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', close);
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  if (inputId) {
+    const input = document.getElementById(inputId);
+    if (input) input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && saveId) document.getElementById(saveId)?.click();
+      if (e.key === 'Escape' && escCloses) close();
+    });
+  }
+
+  return { open, close };
+}

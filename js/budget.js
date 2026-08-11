@@ -1943,22 +1943,22 @@ function renderFinanzgarten() {
 }
 
 // Kontostand Modal — bearbeitet kontostand direkt
+const kontostandModal = wireModal('kontostand-modal-overlay', {
+  closeIds: ['kontostand-modal-close', 'kontostand-cancel'],
+  inputId: 'kontostand-input',
+  saveId: 'kontostand-save',
+});
 function openKontostandModal() {
   document.getElementById('kontostand-input').value = kontostand !== null ? kontostand.toFixed(2) : '';
-  document.getElementById('kontostand-modal-overlay').classList.remove('hidden');
+  kontostandModal.open();
   setTimeout(() => document.getElementById('kontostand-input').focus(), 50);
 }
-document.getElementById('kontostand-modal-close').addEventListener('click', () => document.getElementById('kontostand-modal-overlay').classList.add('hidden'));
-document.getElementById('kontostand-cancel').addEventListener('click',       () => document.getElementById('kontostand-modal-overlay').classList.add('hidden'));
-document.getElementById('kontostand-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('kontostand-modal-overlay')) document.getElementById('kontostand-modal-overlay').classList.add('hidden');
-});
 document.getElementById('kontostand-save').addEventListener('click', () => {
   const val = parseFloat(document.getElementById('kontostand-input').value);
   if (isNaN(val)) return;
   kontostand = val;
   saveKontostand();
-  document.getElementById('kontostand-modal-overlay').classList.add('hidden');
+  kontostandModal.close();
   renderBudget();
 });
 
@@ -2188,6 +2188,13 @@ function syncRecurringAmountFromRange() {
   document.getElementById('recurring-amount').value = avg;
 }
 
+const recurringModal = wireModal('recurring-modal-overlay', {
+  closeIds: ['recurring-modal-close', 'recurring-cancel'],
+  inputId: 'recurring-name',
+  saveId: 'recurring-save',
+  onClose: () => { recurringEditId = null; },
+});
+
 function openRecurringModal(entry = null) {
   recurringEditId = entry ? entry.id : null;
 
@@ -2255,7 +2262,7 @@ function openRecurringModal(entry = null) {
     renderFundingEditor(document.getElementById('recurring-funding-list'), (entry && entry.funding) || [], currentRecurringAmount, 'rec-funding');
   }
 
-  document.getElementById('recurring-modal-overlay').classList.remove('hidden');
+  recurringModal.open();
   setTimeout(() => document.getElementById('recurring-name').focus(), 50);
 }
 
@@ -2307,13 +2314,6 @@ document.getElementById('recurring-amount').addEventListener('input', () => {
   if (recurringType === 'expense' && typeof updateFundingDiff === 'function') {
     updateFundingDiff(document.getElementById('recurring-funding-list'), currentRecurringAmount(), 'rec-funding');
   }
-});
-
-document.getElementById('recurring-modal-close').addEventListener('click',  () => document.getElementById('recurring-modal-overlay').classList.add('hidden'));
-document.getElementById('recurring-cancel').addEventListener('click',        () => document.getElementById('recurring-modal-overlay').classList.add('hidden'));
-document.getElementById('recurring-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('recurring-modal-overlay'))
-    document.getElementById('recurring-modal-overlay').classList.add('hidden');
 });
 
 document.getElementById('recurring-save').addEventListener('click', () => {
@@ -2393,8 +2393,7 @@ document.getElementById('recurring-save').addEventListener('click', () => {
   }
 
   saveBudgetRecurring();
-  document.getElementById('recurring-modal-overlay').classList.add('hidden');
-  recurringEditId = null;
+  recurringModal.close();
   renderBudget();
 });
 
@@ -2417,6 +2416,12 @@ function currentOnetimeAmount() {
   return parseFloat(document.getElementById('onetime-amount').value) || 0;
 }
 
+const onetimeModal = wireModal('onetime-modal-overlay', {
+  closeIds: ['onetime-modal-close', 'onetime-cancel'],
+  inputId: 'onetime-name',
+  saveId: 'onetime-save',
+});
+
 document.getElementById('add-onetime-btn').addEventListener('click', () => {
   document.getElementById('onetime-name').value = '';
   document.getElementById('onetime-amount').value = '';
@@ -2434,7 +2439,7 @@ document.getElementById('add-onetime-btn').addEventListener('click', () => {
   if (typeof renderFundingEditor === 'function') {
     renderFundingEditor(document.getElementById('onetime-funding-list'), [], currentOnetimeAmount, 'onetime-funding');
   }
-  document.getElementById('onetime-modal-overlay').classList.remove('hidden');
+  onetimeModal.open();
   setTimeout(() => document.getElementById('onetime-name').focus(), 50);
 });
 
@@ -2461,12 +2466,6 @@ document.getElementById('onetime-amount').addEventListener('input', () => {
   });
 });
 
-document.getElementById('onetime-modal-close').addEventListener('click',  () => document.getElementById('onetime-modal-overlay').classList.add('hidden'));
-document.getElementById('onetime-cancel').addEventListener('click',        () => document.getElementById('onetime-modal-overlay').classList.add('hidden'));
-document.getElementById('onetime-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('onetime-modal-overlay'))
-    document.getElementById('onetime-modal-overlay').classList.add('hidden');
-});
 document.getElementById('onetime-save').addEventListener('click', () => {
   const name = document.getElementById('onetime-name').value.trim();
   if (!name) return;
@@ -2489,7 +2488,7 @@ document.getElementById('onetime-save').addEventListener('click', () => {
       : {}),
   });
   saveBudgetOnetime();
-  document.getElementById('onetime-modal-overlay').classList.add('hidden');
+  onetimeModal.close();
   renderBudget();
 });
 
@@ -2516,9 +2515,14 @@ function setGoalPriorityButtons(p) {
   if (btn) btn.addEventListener('click', () => { goalPriority = p; setGoalPriorityButtons(p); });
 });
 
+const goalModal = wireModal('goal-modal-overlay', {
+  closeIds: ['goal-modal-close', 'goal-cancel'],
+  inputId: 'goal-name',
+  saveId: 'goal-save',
+  onClose: () => { editingGoalId = null; },
+});
 function closeGoalModal() {
-  document.getElementById('goal-modal-overlay').classList.add('hidden');
-  editingGoalId = null;
+  goalModal.close();
 }
 
 document.getElementById('add-goal-btn').addEventListener('click', () => {
@@ -2542,7 +2546,7 @@ document.getElementById('add-goal-btn').addEventListener('click', () => {
   // Reset plant selector to first option
   const firstRadio = document.querySelector('input[name="goal-plant"]');
   if (firstRadio) firstRadio.checked = true;
-  document.getElementById('goal-modal-overlay').classList.remove('hidden');
+  goalModal.open();
   setTimeout(() => document.getElementById('goal-name').focus(), 50);
 });
 
@@ -2569,12 +2573,10 @@ function openEditGoalModal(goal) {
   const radio = document.querySelector(`input[name="goal-plant"][value="${goal.plantType}"]`);
   if (radio) radio.checked = true;
   else { const firstRadio = document.querySelector('input[name="goal-plant"]'); if (firstRadio) firstRadio.checked = true; }
-  document.getElementById('goal-modal-overlay').classList.remove('hidden');
+  goalModal.open();
   setTimeout(() => document.getElementById('goal-name').focus(), 50);
 }
 
-document.getElementById('goal-modal-close').addEventListener('click',  closeGoalModal);
-document.getElementById('goal-cancel').addEventListener('click',        closeGoalModal);
 document.getElementById('goal-delete').addEventListener('click', () => {
   if (!editingGoalId) return;
   const goal = budgetGoals.find(g => g.id === editingGoalId);
@@ -2589,9 +2591,6 @@ document.getElementById('goal-delete').addEventListener('click', () => {
   renderFinanzgarten();
   if (typeof renderSparziele === 'function') renderSparziele();
   if (typeof renderSparplaner === 'function') renderSparplaner();
-});
-document.getElementById('goal-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('goal-modal-overlay')) closeGoalModal();
 });
 document.getElementById('goal-save').addEventListener('click', () => {
   const name = document.getElementById('goal-name').value.trim();
@@ -2632,7 +2631,7 @@ document.getElementById('goal-save').addEventListener('click', () => {
     });
   }
   saveBudgetGoals();
-  document.getElementById('goal-modal-overlay').classList.add('hidden');
+  goalModal.close();
   renderBudgetGoals();
   renderFinanzgarten();
   renderSparplaner();
@@ -2661,9 +2660,14 @@ function setDebtPriorityButtons(p) {
   if (btn) btn.addEventListener('click', () => { debtPriority = p; setDebtPriorityButtons(p); });
 });
 
+const debtModal = wireModal('debt-modal-overlay', {
+  closeIds: ['debt-modal-close', 'debt-cancel'],
+  inputId: 'debt-name',
+  saveId: 'debt-save',
+  onClose: () => { editingDebtId = null; },
+});
 function closeDebtModal() {
-  document.getElementById('debt-modal-overlay').classList.add('hidden');
-  editingDebtId = null;
+  debtModal.close();
 }
 
 document.getElementById('debt-add-btn').addEventListener('click', () => {
@@ -2682,7 +2686,7 @@ document.getElementById('debt-add-btn').addEventListener('click', () => {
   if (typeof renderFundingEditor === 'function') {
     renderFundingEditor(document.getElementById('debt-funding-list'), [], null, 'debt-funding');
   }
-  document.getElementById('debt-modal-overlay').classList.remove('hidden');
+  debtModal.open();
   setTimeout(() => document.getElementById('debt-name').focus(), 50);
 });
 
@@ -2703,12 +2707,10 @@ function openEditDebtModal(debt) {
   if (typeof renderFundingEditor === 'function') {
     renderFundingEditor(document.getElementById('debt-funding-list'), debt.funding || [], null, 'debt-funding');
   }
-  document.getElementById('debt-modal-overlay').classList.remove('hidden');
+  debtModal.open();
   setTimeout(() => document.getElementById('debt-name').focus(), 50);
 }
 
-document.getElementById('debt-modal-close').addEventListener('click', closeDebtModal);
-document.getElementById('debt-cancel').addEventListener('click',       closeDebtModal);
 document.getElementById('debt-delete').addEventListener('click', () => {
   if (!editingDebtId) return;
   const debt = budgetDebts.find(d => d.id === editingDebtId);
@@ -2719,9 +2721,6 @@ document.getElementById('debt-delete').addEventListener('click', () => {
   closeDebtModal();
   if (typeof renderSchulden === 'function') renderSchulden();
   if (typeof renderFinanzanalyse === 'function') renderFinanzanalyse();
-});
-document.getElementById('debt-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('debt-modal-overlay')) closeDebtModal();
 });
 document.getElementById('debt-save').addEventListener('click', () => {
   const name = document.getElementById('debt-name').value.trim();
@@ -2761,27 +2760,27 @@ document.getElementById('debt-save').addEventListener('click', () => {
 });
 
 let goalTxTarget = null, goalTxMode = 'deposit', goalTxKind = 'goal';
+const goalTxModal = wireModal('goal-tx-modal-overlay', {
+  closeIds: ['goal-tx-close', 'goal-tx-cancel'],
+  inputId: 'goal-tx-amount',
+  saveId: 'goal-tx-save',
+  onClose: () => { goalTxTarget = null; },
+});
 function openGoalTx(goal, mode) {
   goalTxTarget = goal; goalTxMode = mode; goalTxKind = 'goal';
   document.getElementById('goal-tx-title').textContent =
     mode === 'deposit' ? `Einzahlen — ${goal.name}` : `Abheben — ${goal.name}`;
   document.getElementById('goal-tx-amount').value = '';
-  document.getElementById('goal-tx-modal-overlay').classList.remove('hidden');
+  goalTxModal.open();
   setTimeout(() => document.getElementById('goal-tx-amount').focus(), 50);
 }
 function openDebtTx(debt) {
   goalTxTarget = debt; goalTxMode = 'pay'; goalTxKind = 'debt';
   document.getElementById('goal-tx-title').textContent = `Bezahlen — ${debt.name}`;
   document.getElementById('goal-tx-amount').value = '';
-  document.getElementById('goal-tx-modal-overlay').classList.remove('hidden');
+  goalTxModal.open();
   setTimeout(() => document.getElementById('goal-tx-amount').focus(), 50);
 }
-document.getElementById('goal-tx-close').addEventListener('click',  () => document.getElementById('goal-tx-modal-overlay').classList.add('hidden'));
-document.getElementById('goal-tx-cancel').addEventListener('click', () => document.getElementById('goal-tx-modal-overlay').classList.add('hidden'));
-document.getElementById('goal-tx-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('goal-tx-modal-overlay'))
-    document.getElementById('goal-tx-modal-overlay').classList.add('hidden');
-});
 document.getElementById('goal-tx-save').addEventListener('click', () => {
   if (!goalTxTarget) return;
   const amt = parseFloat(document.getElementById('goal-tx-amount').value) || 0;
@@ -2800,8 +2799,7 @@ document.getElementById('goal-tx-save').addEventListener('click', () => {
     renderSparplaner();
     if (typeof renderSparziele === 'function') renderSparziele();
   }
-  document.getElementById('goal-tx-modal-overlay').classList.add('hidden');
-  goalTxTarget = null;
+  goalTxModal.close();
 });
 
 // =========================
@@ -2826,16 +2824,14 @@ function openFinanzbaumModal() {
       </div>`;
     rows.appendChild(row);
   });
-  document.getElementById('finanzbaum-modal-overlay').classList.remove('hidden');
+  finanzbaumModal.open();
 }
 
-document.getElementById('finanzbaum-config-btn').addEventListener('click', openFinanzbaumModal);
-document.getElementById('finanzbaum-modal-close').addEventListener('click',  () => document.getElementById('finanzbaum-modal-overlay').classList.add('hidden'));
-document.getElementById('finanzbaum-config-cancel').addEventListener('click', () => document.getElementById('finanzbaum-modal-overlay').classList.add('hidden'));
-document.getElementById('finanzbaum-modal-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('finanzbaum-modal-overlay'))
-    document.getElementById('finanzbaum-modal-overlay').classList.add('hidden');
+const finanzbaumModal = wireModal('finanzbaum-modal-overlay', {
+  closeIds: ['finanzbaum-modal-close', 'finanzbaum-config-cancel'],
 });
+
+document.getElementById('finanzbaum-config-btn').addEventListener('click', openFinanzbaumModal);
 
 document.getElementById('finanzbaum-config-save').addEventListener('click', () => {
   const inputs = document.querySelectorAll('.finanzbaum-min-input');
@@ -2853,7 +2849,7 @@ document.getElementById('finanzbaum-config-save').addEventListener('click', () =
     inputs[i].setCustomValidity('');
   }
   DB.set('finanzbaumLevels', mins);
-  document.getElementById('finanzbaum-modal-overlay').classList.add('hidden');
+  finanzbaumModal.close();
   renderFinanzgarten();
 });
 
