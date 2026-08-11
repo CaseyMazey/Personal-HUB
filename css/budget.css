@@ -1074,6 +1074,15 @@
    sanfte Schatten, viel Weißraum — keine Tabellenoptik. ── */
 .gf-view { display: flex; flex-direction: column; gap: 22px; }
 
+/* ── Monatsrest — dezente Pille im Stil der Kontostand-Pille ── */
+.gf-monatsrest-pill {
+  align-self: center; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  padding: 6px 18px; box-shadow: var(--shadow-sm);
+}
+.gf-monatsrest-label { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3); }
+.gf-monatsrest-value { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+
 /* ── Einnahmen-Zeitachse: Wochen als Spalten, Monatsposten als Balken ── */
 .gf-week-grid {
   display: grid; grid-template-columns: repeat(var(--gf-week-count, 4), 1fr); gap: 0;
@@ -1081,8 +1090,9 @@
 }
 .gf-week-col { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
 .gf-week-col + .gf-week-col { border-left: 1px dashed var(--border); }
-.gf-week-head { text-align: center; margin-bottom: 2px; }
+.gf-week-head { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin-bottom: 2px; }
 .gf-week-title { font-size: 12px; font-weight: 700; color: var(--text); }
+.gf-week-total { font-family: var(--mono); font-size: 12px; font-weight: 700; }
 @media (max-width: 760px) { .gf-week-grid { grid-template-columns: repeat(2, 1fr); } .gf-week-col + .gf-week-col { border-left: none; border-top: 1px dashed var(--border); } }
 
 .gf-bar-wrap { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
@@ -1092,22 +1102,27 @@
   transition: box-shadow var(--transition), transform var(--transition);
 }
 .gf-income-bar.gf-drop-hover { box-shadow: 0 0 0 2px var(--sage), 0 4px 14px rgba(50,40,20,0.12); transform: translateY(-2px); }
-.gf-bar-main { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; text-align: center; }
-.gf-bar-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
-.gf-bar-amount { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--text); }
-.gf-bar-rest { font-size: 12px; font-weight: 700; }
+/* Name + Rest rücken eng zusammen in die Mitte (Hauptinformation), der
+   volle Betrag bleibt als kleine Nebeninfo direkt daneben statt am
+   Kartenrand zu kleben. */
+.gf-bar-main { display: flex; align-items: baseline; justify-content: center; gap: 10px; flex-wrap: wrap; text-align: center; }
+.gf-bar-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.gf-bar-rest { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+.gf-bar-amount-sub { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
 .gf-stack--bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .gf-stack--bar .gf-stack-item { margin-top: 0; }
 
 .gf-income-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--b-radius-sm);
   box-shadow: 0 2px 6px rgba(50,40,20,0.06); padding: 10px 11px 8px; width: 100%;
-  display: flex; flex-direction: column; gap: 5px; transition: box-shadow var(--transition), transform var(--transition);
+  display: flex; flex-direction: column; gap: 4px; transition: box-shadow var(--transition), transform var(--transition);
 }
 .gf-income-card.gf-drop-hover { box-shadow: 0 0 0 2px var(--sage), 0 4px 14px rgba(50,40,20,0.12); transform: translateY(-2px); }
 .gf-income-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .gf-income-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.gf-income-amount { font-family: var(--mono); font-size: 19px; font-weight: 700; color: var(--text); }
+/* Nebeninfo: der ursprüngliche Betrag — bewusst klein, der Rest (oben)
+   ist jetzt die Hauptinformation der Karte. */
+.gf-income-amount-sub { font-family: var(--mono); font-size: 11px; color: var(--text-3); text-align: right; }
 
 /* Farbfamilie je Einnahmequelle (bis zu 4, rotierend) — ans Mockup
    angelehnt: jede Einnahme bekommt eine eigene, stabile Farbe, damit man
@@ -1134,7 +1149,9 @@
 .gf-stack-item--over { background: var(--b-red-soft); color: var(--b-red); border-color: var(--b-red); }
 .gf-stack-item + .gf-stack-item { margin-top: 3px; }
 
-.gf-rest { font-size: 12px; font-weight: 700; text-align: right; padding-top: 4px; border-top: 1px dashed var(--border); }
+/* Rest — jetzt die groß hervorgehobene Hauptinformation jeder Karte. */
+.gf-rest { font-size: 12px; font-weight: 700; }
+.gf-rest-hero { font-family: var(--mono); font-size: 22px; font-weight: 700; padding: 2px 0 4px; }
 .gf-rest-ok   { color: var(--b-green); }
 .gf-rest-low  { color: var(--b-olive); }
 .gf-rest-over { color: var(--b-red); }

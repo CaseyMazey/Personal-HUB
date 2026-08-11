@@ -44,6 +44,29 @@
   if (changed) saveBudgetGoals();
 })();
 
+// ── Migration: jeder Finanzierungseintrag bekommt eine eigene ID ──
+// Vorher wurden Einträge nur über sourceId identifiziert — das führte
+// dazu, dass "eine Zuordnung entfernen/verschieben" ALLE Einträge
+// derselben Einnahme traf, nicht nur den einen, der gerade gezogen
+// wurde (Ursache des in der Geldfluss-Ansicht gemeldeten Dopplungs-
+// Bugs). Mit einer eigenen ID pro Eintrag lässt sich jede einzelne
+// Zuordnung eindeutig ansprechen. Additiv, bestehende Beträge bleiben
+// unverändert — nur das Identifizieren wird präziser.
+(function migrateFundingEntryIds() {
+  let changed = false;
+  const ensureIds = (arr) => {
+    (arr || []).forEach(f => { if (!f.id) { f.id = crypto.randomUUID(); changed = true; } });
+  };
+  budgetGoals.forEach(g => ensureIds(g.funding));
+  budgetRecurring.forEach(r => ensureIds(r.funding));
+  budgetOnetime.forEach(e => ensureIds(e.funding));
+  if (typeof budgetDebts !== 'undefined') budgetDebts.forEach(d => ensureIds(d.funding));
+  if (changed) {
+    saveBudgetGoals(); saveBudgetRecurring(); saveBudgetOnetime();
+    if (typeof saveBudgetDebts === 'function') saveBudgetDebts();
+  }
+})();
+
 // ── Geteilter Finanzierungs-Editor ──────────────────────────────────
 // EIN Rendering für alle Formulare, die Finanzierung anbieten (aktuell:
 // Sparziel-Modal, Sparplan-Wizard "Neues Sparziel"; künftig: Ausgaben-

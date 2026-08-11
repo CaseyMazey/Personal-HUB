@@ -21,7 +21,7 @@ function debtProgressPct(debt){
 
 // ── Rendering ────────────────────────────────────────────────────────
 function renderSchulden(){
-  if (document.getElementById('budget-panel-schulden')?.classList.contains('hidden')) return;
+  if (budgetActiveSubtab !== 'schulden') return;
   const grid = document.getElementById('schulden-grid');
   if (!grid) return;
   grid.innerHTML = '';

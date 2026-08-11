@@ -1,19 +1,34 @@
 // =========================
-// BUDGET — GELDFLUSS
-// Reines Planungsboard für den aktuellen Monats-Geldfluss.
+// BUDGET — GELDFLUSS (ersetzt die bisherige, textlastige Finanzanalyse)
+// Reines Planungsboard, KEINE Monatsansicht mit echten Kalenderdaten:
+// "Woche 1–4" sind generische Platzhalter, kein bestimmter Monat. Man
+// plant hier einmalig, wovon eine Ausgabe/ein Sparziel/eine Schuld
+// bezahlt wird — das Ergebnis gilt dauerhaft, bis es geändert wird
+// (kein "für jeden Monat neu aufsetzen"). Gespeichert wird deshalb auch
+// NUR "Taschengeld finanziert ChatGPT", niemals "Woche 2 von Taschengeld
+// finanziert ChatGPT" — die Verteilung auf die 4 Wochen-Karten ist rein
+// visuell (sequenzielle Auffüllung), kein eigenes Datenfeld.
 //
-// Bugfixes & UX-Anpassungen:
-// 1. Nur relevante Einträge des AKTUELLEN Monats werden angezeigt
-//    (keine vergangenen/erledigten Einmalausgaben, abgelaufene Sparziele etc.).
-// 2. Drag & Drop targetet die KONKRETE Einnahme-Instanz (Slot/Woche/Bar).
-//    Jede Einnahmekarte hat eine eigene UID (z.B. "rec_id@week-0").
-//    Die Zuordnung speichert nun slotId zusätzlich zur sourceId.
-// 3. "Nicht zugeordnet"-Spalte ist komplett entfernt.
+// Architektur — keine doppelte Logik:
+//   - Monats-Äquivalent: recurringMonthlyEquivalent() (budget.js)
+//   - Sparziel-Bedarf:   goalMonthlyReserveEquivalent() (budget-sparziele.js)
+//   - Schulden-Rest:     debtRemaining()                (budget-debts.js)
+//   - Freier Betrag:     financingFreeForIncome()        (budget-financing.js)
+// Drag & Drop schreibt ausschließlich in das bestehende Finanzierungs-
+// Format (`funding: [{sourceId, amount}]`) — denselben Feldern, die auch
+// der Checkbox-Editor in den Modals nutzt (beides bleibt nutzbar).
+// Muss NACH budget.js, budget-sparziele.js, budget-financing.js,
+// budget-debts.js geladen werden.
 // =========================
 
-// ── Hilfsfunktionen & Datenaufbau ────────────────────────────────────
-
-function geldflussWeeklyOccurrences(entry) {
+// ── Datenaufbau ──────────────────────────────────────────────────────
+// Generische 4-Wochen-Vorlage pro wiederkehrender Einnahme — KEINE
+// echten Kalenderdaten. Wöchentlich → eine Karte je Woche (4). 2-wöchent-
+// lich → Woche 1 & 3. Täglich → 7 Karten je Woche (28). Monatlich/
+// jährlich bekommen gar keine Wochen-Karte, sondern einen Balken (siehe
+// renderGeldflussIncomeArea) — sie sollen ja "für den ganzen Zeitraum"
+// reichen, nicht an eine Woche gebunden sein.
+function geldflussWeeklyOccurrences(entry){
   const amount = entry.amount || 0;
   if (entry.freq === 'daily')    return [0, 1, 2, 3].flatMap(w => Array.from({ length: 7 }, () => ({ week: w, amount })));
   if (entry.freq === 'weekly')   return [0, 1, 2, 3].map(w => ({ week: w, amount }));
@@ -21,16 +36,22 @@ function geldflussWeeklyOccurrences(entry) {
   return [];
 }
 
+// ── Farbgebung je Einnahmequelle — angelehnt ans Mockup: jede Einnahme
+// bekommt eine eigene, stabile Farbfamilie (wiederverwendet bestehende
+// Budget-Farbtöne + die zwei neuen aus budget.css), damit man auf einen
+// Blick sieht, welche Stapel-Karte zu welcher Einnahme gehört.
 const GF_INCOME_PALETTE = ['gf-income-c1', 'gf-income-c2', 'gf-income-c3', 'gf-income-c4'];
-function incomeColorClass(recurringId) {
+function incomeColorClass(recurringId){
   const incomes = budgetRecurring.filter(r => r.type === 'income' && r.freq !== 'yearly');
   const idx = Math.max(0, incomes.findIndex(r => r.id === recurringId));
   return GF_INCOME_PALETTE[idx % GF_INCOME_PALETTE.length];
 }
 
-// Baut alle konkreten Einnahmekarten/Slots für den Monats-Geldfluss auf
-function buildGeldflussIncomeCards() {
+function buildGeldflussIncomeCards(){
   const cards = [];
+  // Jährliche Einnahmen bewusst NICHT einbezogen — der Geldfluss ist
+  // eine reine Monatsansicht, einmal im Jahr auftretende Zahlungen sind
+  // Sonderfälle, die hier nicht sinnvoll dargestellt werden können.
   budgetRecurring.filter(r => r.type === 'income' && r.freq !== 'yearly').forEach(r => {
     const isBar = r.freq === 'monthly';
     if (isBar) {
@@ -45,24 +66,24 @@ function buildGeldflussIncomeCards() {
   return cards;
 }
 
-// Filtert Verbraucher strictly für den AKTUELLEN Monat
-function buildGeldflussConsumers() {
+// Alle "Belastungen" (Ausgaben/Sparziele/Schulden) mit ihrem tatsächlich
+// benötigten Betrag (nutzt vorhandene Berechnungen, siehe Header) und
+// ihrer bestehenden Finanzierung. Genau EINE Karte pro Objekt — auch bei
+// wiederkehrenden Ausgaben mit einem Intervall, da es hier nicht um
+// Kalendertermine geht, sondern nur um "wovon wird das bezahlt".
+// Onetime-Ausgaben zählen, solange sie noch nicht bezahlt sind (nicht an
+// einen bestimmten Monat gebunden, siehe Dateikopf). Jährliche Ausgaben
+// bewusst NICHT einbezogen — reine Monatsansicht, siehe oben.
+function buildGeldflussConsumers(){
   const list = [];
-  const curMk = budgetMonthKey(budgetMonth || new Date());
-
-  // 1. Wiederkehrende Ausgaben
   budgetRecurring.filter(r => r.type === 'expense' && r.freq !== 'yearly').forEach(r => {
     list.push({ kind: 'expense', id: r.id, uid: r.id, name: r.name, amount: recurringMonthlyEquivalent(r),
       funding: r.funding || [], obj: r });
   });
-
-  // 2. Einmalige Ausgaben: NUR aus dem aktuell ausgewählten Monat AND NICHT als erledigt markiert
-  budgetOnetime.filter(e => e.type === 'expense' && e.monthKey === curMk && !e.paid).forEach(e => {
+  budgetOnetime.filter(e => e.type === 'expense' && !e.paid).forEach(e => {
     list.push({ kind: 'expense', id: e.id, uid: e.id, name: e.name, amount: e.amount,
       funding: e.funding || [], obj: e, isOnetime: true });
   });
-
-  // 3. Aktive Sparziele
   budgetGoals.forEach(g => {
     const need = goalMonthlyReserveEquivalent(g);
     const remaining = round2(Math.max(0, g.target - g.current));
@@ -71,199 +92,195 @@ function buildGeldflussConsumers() {
     list.push({ kind: 'goal', id: g.id, uid: g.id, name: g.name, amount,
       funding: g.funding || [], obj: g, isMonthly: need > 0.005 });
   });
-
-  // 4. Aktive Schulden
   budgetDebts.forEach(d => {
     const remaining = debtRemaining(d);
     if (remaining <= 0.005) return;
     list.push({ kind: 'debt', id: d.id, uid: d.id, name: d.name, amount: remaining,
       funding: d.funding || [], obj: d });
   });
-
   return list;
 }
 
-// Verteilt Zuordnungen exakt auf die jeweiligen Instanzen (slotId)
-function distributeGeldfluss(incomeCards, consumers) {
-  const cardMap = {};
-  incomeCards.forEach(c => { cardMap[c.uid] = c; });
-
+// Verteilt die bereits zugeordneten Finanzierungsbeträge (funding) jedes
+// Verbrauchers auf die generischen Wochen-Karten seiner Einnahmequelle —
+// der Reihe nach, erste Karte zuerst. Rein visuelle Aufteilung, siehe
+// Kommentar am Dateianfang — es wird NICHT gespeichert, welche Karte
+// konkret gewählt wurde.
+function distributeGeldfluss(incomeCards, consumers){
   const byRecurringId = {};
   incomeCards.forEach(c => { (byRecurringId[c.recurringId] ||= []).push(c); });
 
-  consumers.forEach(cons => {
-    if (!Array.isArray(cons.funding)) return;
-    cons.funding.forEach(f => {
-      if (!f || f.amount <= 0.005) return;
-      let left = f.amount;
-
-      // Wenn eine konkrete slotId angegeben ist, bevorzugt dort ablegen
-      if (f.slotId && cardMap[f.slotId]) {
-        const targetCard = cardMap[f.slotId];
-        const take = round2(Math.min(left, targetCard.remaining));
-        if (take > 0.005) {
-          targetCard.stack.push({ kind: cons.kind, id: cons.id, uid: cons.uid, name: cons.name, amount: take, slotId: f.slotId });
-          targetCard.remaining = round2(targetCard.remaining - take);
-          left = round2(left - take);
-        }
-      }
-
-      // Falls noch Restbetrag offen ist oder keine slotId existierte (Fallback/Kompaktsicht)
-      if (left > 0.005) {
-        const cards = byRecurringId[f.sourceId] || [];
-        for (let card of cards) {
-          if (left <= 0.005) break;
-          if (card.remaining > 0.005) {
-            const take = round2(Math.min(left, card.remaining));
-            card.stack.push({ kind: cons.kind, id: cons.id, uid: cons.uid, name: cons.name, amount: take, slotId: card.uid });
+  Object.keys(byRecurringId).forEach(recId => {
+    const cards = byRecurringId[recId];
+    let cardIdx = 0;
+    consumers.forEach(cons => {
+      // Jeder Finanzierungseintrag wird jetzt EINZELN behandelt (nicht
+      // mehr zu einem Gesamtbetrag je Einnahme zusammengefasst) — seit
+      // dem Architektur-Fix ist jeder Eintrag ohnehin schon beim
+      // Zuordnen auf die Kapazität EINER Karte gedeckelt, landet also
+      // im Normalfall komplett in genau einer Karte.
+      cons.funding.filter(f => f.sourceId === recId).forEach(f => {
+        if (f.amount <= 0.005) return;
+        let left = f.amount;
+        while (left > 0.005 && cardIdx < cards.length) {
+          const card = cards[cardIdx];
+          const take = round2(Math.min(left, card.remaining));
+          if (take > 0.005) {
+            card.stack.push({ kind: cons.kind, id: cons.id, uid: cons.uid, name: cons.name, amount: take, fundingEntryId: f.id });
             card.remaining = round2(card.remaining - take);
             left = round2(left - take);
           }
+          if (card.remaining <= 0.005) cardIdx++; else break;
         }
-        // Überhang auf die letzte Karte
         if (left > 0.005 && cards.length) {
           const overCard = cards[cards.length - 1];
-          overCard.stack.push({ kind: cons.kind, id: cons.id, uid: cons.uid, name: cons.name, amount: left, over: true, slotId: overCard.uid });
+          overCard.stack.push({ kind: cons.kind, id: cons.id, uid: cons.uid, name: cons.name, amount: left, fundingEntryId: f.id, over: true });
           overCard.remaining = round2(overCard.remaining - left);
         }
-      }
+      });
     });
   });
 }
 
-function consumerAssigned(cons) { return round2(cons.funding.reduce((s, f) => s + f.amount, 0)); }
-function consumerRemainder(cons) { return round2(Math.max(0, cons.amount - consumerAssigned(cons))); }
+function consumerAssigned(cons){ return round2(cons.funding.reduce((s, f) => s + f.amount, 0)); }
+function consumerRemainder(cons){ return round2(Math.max(0, cons.amount - consumerAssigned(cons))); }
 
-function saveConsumerObject(kind, obj) {
+function saveConsumerObject(kind, obj){
   if (kind === 'expense') { obj.freq !== undefined ? saveBudgetRecurring() : saveBudgetOnetime(); }
   else if (kind === 'goal') saveBudgetGoals();
   else if (kind === 'debt') saveBudgetDebts();
 }
-
-function findConsumerObject(kind, id) {
+function findConsumerObject(kind, id){
   if (kind === 'expense') return budgetRecurring.find(r => r.id === id) || budgetOnetime.find(e => e.id === id);
   if (kind === 'goal') return budgetGoals.find(g => g.id === id);
   if (kind === 'debt') return budgetDebts.find(d => d.id === id);
   return null;
 }
 
-// Zuordnen mit konkreter Instanz (slotId)
-function geldflussAssign(kindOrCons, idOrRecurringId, slotIdOrAmount, amountOrRecurringId, maybeAmount) {
-  let cons, recurringId, slotId, amount;
-
-  if (typeof kindOrCons === 'object') {
-    cons = kindOrCons;
-    slotId = idOrRecurringId;
-    recurringId = slotId.split('@')[0];
-    amount = slotIdOrAmount;
-  } else {
-    const obj = findConsumerObject(kindOrCons, idOrRecurringId);
-    if (!obj) return false;
-    cons = { kind: kindOrCons, obj };
-    slotId = slotIdOrAmount;
-    recurringId = amountOrRecurringId;
-    amount = maybeAmount;
-  }
-
-  const free = round2(Math.max(0, financingFreeForIncome(recurringId)));
-  const take = round2(Math.min(amount, free));
+// ── Zuordnen / Entfernen — schreibt ausschließlich ins bestehende
+// funding-Array, keine neue Datenstruktur bei den Verbrauchern selbst.
+// KORREKTUR (gemeldeter Architekturfehler): Zuordnung wird jetzt IMMER
+// auf die Kapazität der KONKRET GEZOGENEN KARTE gedeckelt (cardCapacity),
+// NICHT mehr auf den monatlichen Gesamt-Freibetrag der Einnahme. Reicht
+// die Karte nicht, wird NUR der passende Teil zugeordnet — der Rest wird
+// NIE automatisch anderswo platziert, sondern bleibt als (kleinerer)
+// Rest bei der Ausgabe selbst sichtbar, bis der Nutzer ihn selbst zieht.
+// Jeder Zuordnungs-Eintrag bekommt eine eigene ID (kein Zusammenführen
+// mit vorhandenen Einträgen derselben Quelle mehr) — dadurch lässt sich
+// jede einzelne Zuordnung unabhängig verschieben/entfernen, ohne
+// versehentlich andere Zuordnungen derselben Einnahme mit zu beeinflussen.
+function geldflussAssign(cons, recurringId, amount, cardCapacity){
+  const cap = cardCapacity == null ? amount : Math.max(0, cardCapacity);
+  const take = round2(Math.min(amount, cap));
   if (take <= 0.005) return false;
-
   const obj = cons.obj;
   if (!Array.isArray(obj.funding)) obj.funding = [];
-
-  const existing = obj.funding.find(f => f.sourceId === recurringId && f.slotId === slotId);
-  if (existing) {
-    existing.amount = round2(existing.amount + take);
-  } else {
-    obj.funding.push({ sourceId: recurringId, slotId: slotId, amount: take });
-  }
-
+  obj.funding.push({ id: crypto.randomUUID(), sourceId: recurringId, amount: take });
   saveConsumerObject(cons.kind, obj);
   return true;
 }
-
-function geldflussUnassign(kind, id, slotId) {
+// Entfernt GENAU EINEN Zuordnungs-Eintrag (per eigener ID) — nicht mehr
+// "alle Einträge dieser Einnahme". Das war die eigentliche Ursache des
+// gemeldeten Dopplungs-Bugs: Verschieben einer einzelnen Karte hat
+// vorher versehentlich auch andere, unabhängige Zuordnungen zur selben
+// Einnahme mit entfernt.
+function geldflussUnassign(kind, id, fundingEntryId){
   const obj = findConsumerObject(kind, id);
   if (!obj || !Array.isArray(obj.funding)) return;
-  const recurringId = slotId ? slotId.split('@')[0] : null;
-
-  obj.funding = obj.funding.filter(f => {
-    if (slotId && f.slotId) return f.slotId !== slotId;
-    if (recurringId) return f.sourceId !== recurringId;
-    return false;
-  });
-
+  obj.funding = obj.funding.filter(f => f.id !== fundingEntryId);
   saveConsumerObject(kind, obj);
 }
 
-// ── Rendering Töpfe & Stapel ─────────────────────────────────────────
-
+// ── Rendering: obere Zeile — Einnahmen-Töpfe ────────────────────────
 const GELDFLUSS_ICON = { expense: '🔁', goal: '🎯', debt: '💳' };
 
-function renderGeldflussStack(stackEl, stack, slotId) {
+function renderGeldflussStack(stackEl, stack, recurringId){
   stack.forEach((item, i) => {
     const mini = document.createElement('div');
     mini.className = 'gf-stack-item' + (item.over ? ' gf-stack-item--over' : '');
     mini.style.setProperty('--gf-i', i);
     mini.innerHTML = `<span>${GELDFLUSS_ICON[item.kind] || ''} ${item.name}</span><span>${fmtEuro(item.amount)}</span>`;
-    mini.title = 'Klicken zum Entfernen — oder herausziehen';
-    mini.addEventListener('click', () => {
-      geldflussUnassign(item.kind, item.id, slotId);
-      renderFinanzanalyse();
-    });
-    makeGeldflussDraggable(mini, { kind: item.kind, id: item.id, name: item.name }, item.amount, slotId);
+    mini.title = 'Klicken zum Entfernen — oder auf eine andere Einnahme ziehen';
+    // Klicken UND Ziehen laufen jetzt über denselben Mechanismus
+    // (makeGeldflussDraggable erkennt anhand der Bewegung, was gemeint
+    // ist) — kein separater 'click'-Listener mehr, der mit dem Drag-
+    // System kollidieren könnte.
+    makeGeldflussDraggable(mini, { kind: item.kind, id: item.id, name: item.name }, item.amount, recurringId, item.fundingEntryId);
     stackEl.appendChild(mini);
   });
 }
 
-function renderGeldflussIncomeCard(card) {
+function renderGeldflussIncomeCard(card){
   const el = document.createElement('div');
   el.className = 'gf-income-card ' + incomeColorClass(card.recurringId);
   el.dataset.recurringId = card.recurringId;
-  el.dataset.slotId = card.uid;
+  el.dataset.remaining = card.remaining; // eigene Kapazität DIESER Karte — nicht der Monats-Aggregat-Freibetrag
   const pct = card.amount > 0 ? Math.max(0, Math.min(100, Math.round((card.remaining / card.amount) * 100))) : 0;
   const restClass = pct > 25 ? 'gf-rest-ok' : (card.remaining >= -0.005 ? 'gf-rest-low' : 'gf-rest-over');
 
+  // Rest ist jetzt die groß hervorgehobene Hauptinformation, der
+  // ursprüngliche Betrag rutscht zur kleinen Nebeninfo (gleiches
+  // Kartendesign, nur andere Gewichtung — auf Wunsch umgestellt).
   el.innerHTML = `
     <div class="gf-income-head">
       <span class="gf-income-name">${incomeIcon(card.name)} ${card.name}</span>
     </div>
-    <div class="gf-income-amount">${fmtEuro(card.amount)}</div>
+    <div class="gf-rest gf-rest-hero ${restClass}">Rest ${fmtEuro(card.remaining)}</div>
     <div class="gf-stack"></div>
-    <div class="gf-rest ${restClass}">Rest ${fmtEuro(card.remaining)}</div>`;
-  renderGeldflussStack(el.querySelector('.gf-stack'), card.stack, card.uid);
+    <div class="gf-income-amount-sub">${fmtEuro(card.amount)}</div>`;
+  renderGeldflussStack(el.querySelector('.gf-stack'), card.stack, card.recurringId);
   return el;
 }
 
-function renderGeldflussIncomeBar(card) {
+// Monatliche/jährliche Einnahmen: durchgehender Balken statt kleiner
+// Karte, damit sofort sichtbar ist: "das soll für den ganzen Zeitraum
+// reichen", nicht "das ist ein einzelner Zahltag". Name + Rest rücken
+// eng zusammen in die Mitte, der volle Betrag bleibt als kleine
+// Nebeninfo daneben — nicht mehr über die ganze Breite verteilt.
+function renderGeldflussIncomeBar(card){
   const el = document.createElement('div');
   el.className = 'gf-income-bar ' + incomeColorClass(card.recurringId);
   el.dataset.recurringId = card.recurringId;
-  el.dataset.slotId = card.uid;
+  el.dataset.remaining = card.remaining;
   const pct = card.amount > 0 ? Math.max(0, Math.min(100, Math.round((card.remaining / card.amount) * 100))) : 0;
   const restClass = pct > 25 ? 'gf-rest-ok' : (card.remaining >= -0.005 ? 'gf-rest-low' : 'gf-rest-over');
 
   el.innerHTML = `
     <div class="gf-bar-main">
       <span class="gf-bar-name">${incomeIcon(card.name)} ${card.name}</span>
-      <span class="gf-bar-amount">${fmtEuro(card.amount)}</span>
       <span class="gf-bar-rest ${restClass}">Rest ${fmtEuro(card.remaining)}</span>
+      <span class="gf-bar-amount-sub">von ${fmtEuro(card.amount)}</span>
     </div>
     <div class="gf-stack gf-stack--bar"></div>`;
-  renderGeldflussStack(el.querySelector('.gf-stack'), card.stack, card.uid);
+  renderGeldflussStack(el.querySelector('.gf-stack'), card.stack, card.recurringId);
   return el;
 }
 
-function renderGeldflussIncomeArea(container, incomeCards) {
+// Baut den oberen Bereich als generisches 4-Wochen-Planungsboard —
+// KEINE echten Kalenderdaten (siehe Dateikopf). Zeigt zusätzlich den
+// Monatsrest (Pille, wie die Kontostand-Pille) und pro Woche die
+// zusammengefasste Restsumme direkt im Spaltenkopf.
+function renderGeldflussIncomeArea(container, incomeCards){
+  const monatsrest = round2(incomeCards.reduce((s, c) => s + c.remaining, 0));
+  const monatsrestClass = monatsrest > 0.005 ? 'gf-rest-ok' : (monatsrest >= -0.005 ? 'gf-rest-low' : 'gf-rest-over');
+  const monatsrestPill = document.createElement('div');
+  monatsrestPill.className = 'gf-monatsrest-pill';
+  monatsrestPill.innerHTML = `<span class="gf-monatsrest-label">Monatsrest</span><span class="gf-monatsrest-value ${monatsrestClass}">${fmtEuro(monatsrest)}</span>`;
+  container.appendChild(monatsrestPill);
+
   const weekGrid = document.createElement('div');
   weekGrid.className = 'gf-week-grid';
   weekGrid.style.setProperty('--gf-week-count', 4);
   for (let i = 0; i < 4; i++) {
+    const weekCards = incomeCards.filter(c => !c.isBar && c.week === i);
+    const weekTotal = round2(weekCards.reduce((s, c) => s + c.remaining, 0));
+    const weekTotalClass = weekTotal > 0.005 ? 'gf-rest-ok' : (weekTotal >= -0.005 ? 'gf-rest-low' : 'gf-rest-over');
     const col = document.createElement('div');
     col.className = 'gf-week-col';
-    col.innerHTML = `<div class="gf-week-head"><div class="gf-week-title">Woche ${i + 1}</div></div>`;
-    incomeCards.filter(c => !c.isBar && c.week === i).forEach(c => col.appendChild(renderGeldflussIncomeCard(c)));
+    col.innerHTML = weekCards.length
+      ? `<div class="gf-week-head"><div class="gf-week-title">Woche ${i + 1}</div><div class="gf-week-total ${weekTotalClass}">${fmtEuro(weekTotal)}</div></div>`
+      : `<div class="gf-week-head"><div class="gf-week-title">Woche ${i + 1}</div></div>`;
+    weekCards.forEach(c => col.appendChild(renderGeldflussIncomeCard(c)));
     weekGrid.appendChild(col);
   }
   container.appendChild(weekGrid);
@@ -277,9 +294,8 @@ function renderGeldflussIncomeArea(container, incomeCards) {
   }
 }
 
-// ── Rendering Verbraucher-Karten ─────────────────────────────────────
-
-function renderGeldflussConsumerCard(cons, colorClass) {
+// ── Rendering: untere Karten — Ausgaben/Sparziele/Schulden, ziehbar ─
+function renderGeldflussConsumerCard(cons, colorClass){
   const remainder = consumerRemainder(cons);
   const el = document.createElement('div');
   el.className = 'gf-consumer-card' + (colorClass ? ' ' + colorClass : '');
@@ -290,7 +306,14 @@ function renderGeldflussConsumerCard(cons, colorClass) {
   return el;
 }
 
-function renderGeldflussGroup(container, title, dotColorVar, cardColorClass, consumers, addBtnLabel, addBtnTargetId, addBtnExpenseType) {
+// EIN Wrapper pro Gruppe (Titel + Liste zusammen) — muss als einziges
+// Grid-Element in .gf-consumer-grid landen. dotColor/cardColorClass sind
+// ans Mockup angelehnt: jede Gruppe hat eine eigene Farbfamilie (Ausgaben
+// rot, Sparziele blau, Schulden violett, Nicht zugeordnet neutral).
+// addBtnLabel/addBtnTargetId hängen den "+ hinzufügen"-Button an, der zum
+// bestehenden Anlegen-Button der jeweiligen Kategorie weiterleitet (kein
+// neues Anlege-Formular, nur ein bequemer Zugang von hier aus).
+function renderGeldflussGroup(container, title, dotColorVar, cardColorClass, consumers, addBtnLabel, addBtnTargetId, addBtnExpenseType){
   const wrap = document.createElement('div');
   wrap.className = 'gf-group';
   const openConsumers = consumers.filter(c => consumerRemainder(c) > 0.005);
@@ -319,11 +342,26 @@ function renderGeldflussGroup(container, title, dotColorVar, cardColorClass, con
   container.appendChild(wrap);
 }
 
-// ── Drag & Drop Logic ────────────────────────────────────────────────
-
+// ── Drag & Drop — Pointer Events (funktioniert auf Touch UND Maus) ──
+// sourceRecurringId: null = Karte kommt aus dem unteren Bereich (neue
+// Zuordnung); gesetzt = Karte ist bereits zugeordnet und wird verschoben
+// bzw. entfernt. sourceFundingEntryId identifiziert dabei GENAU DIESE
+// eine Zuordnung (nicht "alle Zuordnungen zu dieser Einnahme").
+//
+// WICHTIGER FIX: Klicken und Ziehen liefen vorher über zwei GETRENNTE
+// Mechanismen (ein eigener 'click'-Listener UND dieses Pointer-System)
+// — beide konnten auf denselben Vorgang reagieren und sich gegenseitig
+// ins Gehege kommen (Ursache der gemeldeten Bugs: Karte verschwindet
+// beim Klick und taucht erst nach Neuladen wieder auf; Verschieben auf
+// eine andere Einnahme griff nicht zuverlässig). Jetzt läuft ALLES über
+// dieses eine System: Bewegung unterhalb der Schwelle GF_DRAG_THRESHOLD
+// zählt als Klick, alles darüber als echtes Ziehen — und JEDER Pfad
+// endet garantiert mit einem renderFinanzanalyse()-Aufruf, sobald sich
+// die Daten geändert haben.
 let gfDrag = null;
+const GF_DRAG_THRESHOLD = 4; // Pixel Bewegung, ab der "ziehen" statt "klicken" gilt
 
-function makeGeldflussDraggable(el, cons, remainder, sourceSlotId) {
+function makeGeldflussDraggable(el, cons, remainder, sourceRecurringId, sourceFundingEntryId){
   el.addEventListener('pointerdown', e => {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
@@ -332,58 +370,79 @@ function makeGeldflussDraggable(el, cons, remainder, sourceSlotId) {
     ghost.className = el.className + ' gf-drag-ghost';
     ghost.style.width = rect.width + 'px';
     document.body.appendChild(ghost);
-    gfDrag = { cons, remainder, sourceSlotId, ghost, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    gfDrag = {
+      cons, remainder, sourceRecurringId, sourceFundingEntryId, ghost,
+      offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+      startX: e.clientX, startY: e.clientY, moved: false,
+    };
     el.classList.add('gf-drag-source');
     moveGfGhost(e.clientX, e.clientY);
     document.addEventListener('pointermove', onGfPointerMove);
     document.addEventListener('pointerup', onGfPointerUp, { once: true });
   });
 }
-
-function moveGfGhost(x, y) {
+function moveGfGhost(x, y){
   if (!gfDrag) return;
+  if (!gfDrag.moved && Math.hypot(x - gfDrag.startX, y - gfDrag.startY) > GF_DRAG_THRESHOLD) gfDrag.moved = true;
   gfDrag.ghost.style.left = (x - gfDrag.offsetX) + 'px';
   gfDrag.ghost.style.top  = (y - gfDrag.offsetY) + 'px';
 }
-
-function onGfPointerMove(e) {
+function onGfPointerMove(e){
   moveGfGhost(e.clientX, e.clientY);
   document.querySelectorAll('.gf-drop-hover').forEach(el => el.classList.remove('gf-drop-hover'));
   const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gf-income-card, .gf-income-bar');
   if (under) under.classList.add('gf-drop-hover');
 }
-
-function onGfPointerUp(e) {
+function onGfPointerUp(e){
   document.removeEventListener('pointermove', onGfPointerMove);
   if (!gfDrag) return;
-  const { cons, remainder, sourceSlotId, ghost } = gfDrag;
+  const { cons, remainder, sourceRecurringId, sourceFundingEntryId, ghost, moved } = gfDrag;
   document.querySelectorAll('.gf-drop-hover').forEach(el => el.classList.remove('gf-drop-hover'));
   document.querySelectorAll('.gf-drag-source').forEach(el => el.classList.remove('gf-drag-source'));
   ghost.remove();
-
   const dropTarget = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gf-income-card, .gf-income-bar');
   gfDrag = null;
 
-  if (sourceSlotId) {
-    const targetSlotId = dropTarget?.dataset.slotId || null;
-    if (targetSlotId === sourceSlotId) return;
-    geldflussUnassign(cons.kind, cons.id, sourceSlotId);
-    if (targetSlotId) geldflussAssign(cons.kind, cons.id, targetSlotId, remainder);
+  // Keine nennenswerte Bewegung -> als Klick werten. Bei einer bereits
+  // zugeordneten Karte heißt das: Zuordnung entfernen (und danach
+  // GARANTIERT neu rendern — kein Pfad, der Daten ändert, ohne zu
+  // rendern). Bei einer noch unzugeordneten Karte unten passiert bei
+  // einem bloßen Klick nichts.
+  if (!moved) {
+    if (sourceFundingEntryId) {
+      geldflussUnassign(cons.kind, cons.id, sourceFundingEntryId);
+      renderFinanzanalyse();
+    }
+    return;
+  }
+
+  // Kapazität IMMER von der konkret gezogenen Karte lesen — nicht vom
+  // Monats-Aggregat der Einnahme. Reicht sie nicht, wird nur der
+  // passende Teil verschoben; der Rest bleibt bewusst unzugeordnet
+  // (kein automatisches Weiterverteilen).
+  const cardCapacity = dropTarget ? parseFloat(dropTarget.dataset.remaining) || 0 : 0;
+
+  if (sourceRecurringId) {
+    const targetRecurringId = dropTarget?.dataset.recurringId || null;
+    if (targetRecurringId === sourceRecurringId) { renderFinanzanalyse(); return; } // keine Aenderung, trotzdem sauber neu rendern
+    geldflussUnassign(cons.kind, cons.id, sourceFundingEntryId); // entfernt GENAU diese eine Zuordnung
+    if (targetRecurringId) {
+      const obj = findConsumerObject(cons.kind, cons.id);
+      if (obj) geldflussAssign({ kind: cons.kind, obj }, targetRecurringId, remainder, cardCapacity);
+    }
     renderFinanzanalyse();
     return;
   }
 
   if (!dropTarget) return;
-  const slotId = dropTarget.dataset.slotId;
-  if (!slotId) return;
-
-  const assigned = geldflussAssign(cons, slotId, remainder);
+  const recurringId = dropTarget.dataset.recurringId;
+  if (!recurringId) return;
+  const assigned = geldflussAssign(cons, recurringId, remainder, cardCapacity);
   if (assigned) renderFinanzanalyse();
 }
 
-// ── Haupt-Rendering ───────────────────────────────────────────────────
-
-function renderFinanzanalyse() {
+// ── Rendering ────────────────────────────────────────────────────────
+function renderFinanzanalyse(){
   const body = document.getElementById('finanzanalyse-body');
   if (!body) return;
   body.innerHTML = '';
@@ -407,17 +466,20 @@ function renderFinanzanalyse() {
     renderGeldflussIncomeArea(body, incomeCards);
   }
 
-  // 3-Spalten Layout: Ausgaben / Sparziele / Schulden ("Nicht zugeordnet" entfernt)
+  // Vier Spalten nebeneinander: Ausgaben / Sparziele / Schulden zeigen
+  // jeweils, was in diesem Typ noch (ganz oder teilweise) offen ist.
+  // "Nicht zugeordnet" fasst zusätzlich alles zusammen, das NOCH GAR
+  // NICHT angefasst wurde (typübergreifend) — der schnelle Blick auf
+  // "was habe ich noch nicht mal angefangen zu verplanen".
   const consumerGrid = document.createElement('div');
   consumerGrid.className = 'gf-consumer-grid';
-  consumerGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-
   renderGeldflussGroup(consumerGrid, 'Ausgaben', 'var(--b-red)', 'gf-consumer-red',
     consumers.filter(c => c.kind === 'expense'), 'Ausgabe hinzufügen', 'add-onetime-btn', false);
   renderGeldflussGroup(consumerGrid, 'Sparziele', 'var(--b-blue)', 'gf-consumer-blue',
     consumers.filter(c => c.kind === 'goal'), 'Sparziel hinzufügen', 'add-goal-btn', false);
   renderGeldflussGroup(consumerGrid, 'Schulden', 'var(--b-purple)', 'gf-consumer-purple',
     consumers.filter(c => c.kind === 'debt'), 'Schuld hinzufügen', 'debt-add-btn', false);
-
+  renderGeldflussGroup(consumerGrid, 'Nicht zugeordnet', 'var(--text-3)', '',
+    consumers.filter(c => consumerAssigned(c) <= 0.005), null, null, false);
   body.appendChild(consumerGrid);
 }

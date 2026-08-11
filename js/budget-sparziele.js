@@ -42,7 +42,13 @@ function goalMonthlyReserveEquivalent(goal){
 
 // ── Rendering ────────────────────────────────────────────────────────
 function renderSparziele(){
-  if (document.getElementById('budget-panel-sparziele')?.classList.contains('hidden')) return;
+  // War vorher eine DOM-Klassen-Prüfung (classList.contains('hidden')) —
+  // die konnte je nach Render-Reihenfolge noch den ALTEN Sichtbarkeits-
+  // zustand sehen und lief dann fälschlich früh raus, sodass der
+  // Geldfluss beim allerersten Öffnen des Tabs leer blieb (gemeldeter
+  // Bug). budgetActiveSubtab wird in setBudgetSubtab() als Allererstes
+  // gesetzt, bevor irgendein DOM angefasst wird — daher zuverlässiger.
+  if (budgetActiveSubtab !== 'sparziele') return;
   if (typeof renderFinanzanalyse === 'function') renderFinanzanalyse();
   const grid = document.getElementById('sparziele-grid');
   if (!grid) return;
