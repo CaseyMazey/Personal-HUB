@@ -602,6 +602,7 @@ function renderSingleGuide(guideId) {
   header.className = 'guide-detail-header';
 
   const titleArea = document.createElement('div');
+  titleArea.className = 'guide-detail-title-area';
   titleArea.innerHTML = `
     <div class="guide-detail-title-row">
       ${guide.favorite ? '<span class="guide-fav-star guide-fav-star-lg">★</span>' : ''}
