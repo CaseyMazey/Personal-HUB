@@ -513,6 +513,7 @@
                   <button class="btn-primary" id="add-task-btn">+ Aufgabe</button>
                 </div>
               </div>
+              <div id="task-stats" class="task-stats hidden"></div>
               <ul id="task-list"></ul>
               <div id="task-empty" class="empty-state">Noch keine Aufgaben diese Woche.</div>
             </div>
@@ -1349,6 +1350,13 @@
           <button class="prio-btn" data-prio="1">Hoch</button>
           <button class="prio-btn active" data-prio="2">Normal</button>
           <button class="prio-btn" data-prio="3">Niedrig</button>
+        </div>
+      </div>
+      <div class="modal-row"><label>Status</label>
+        <div id="status-picker">
+          <button class="status-btn active" data-status="open">○ Offen</button>
+          <button class="status-btn" data-status="in_progress">◐ In Bearbeitung</button>
+          <button class="status-btn" data-status="completed">✓ Abgeschlossen</button>
         </div>
       </div>
       <div class="modal-actions"><button id="modal-cancel" class="btn-ghost">Abbrechen</button><button id="modal-save" class="btn-primary">Speichern</button></div>

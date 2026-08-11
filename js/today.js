@@ -598,11 +598,12 @@ function renderBlocks() {
     // Support both legacy single block (task.block) and new multi-block (task.blocks)
     const blockIds = Array.isArray(task.blocks) ? task.blocks
                    : (task.block != null ? [task.block] : []);
+    const status = taskStatusOf(task);
     blockIds.forEach(bid => {
       const ul = document.getElementById(`block-${bid}`); if (!ul) return;
       const li = document.createElement('li');
-      li.className = task.done ? 'block-task-done' : '';
-      li.textContent = task.title;
+      li.className = 'block-task-status-' + status + (status === 'completed' ? ' block-task-done' : '');
+      li.textContent = `${TASK_STATUS[status].icon} ${task.title}`;
       ul.appendChild(li);
     });
   });
@@ -616,17 +617,89 @@ function renderBlocks() {
 
 function saveTasks() { DB.set('tasks', tasks); }
 
+// =========================
+// STATUS-DROPDOWN — schwebendes Menü, an <body> angehängt statt am Task-Item.
+// #panel-tasks (.panel) hat overflow:hidden für die abgerundeten Ecken; ein
+// Dropdown als Kind des Task-Items würde dort am unteren Panelrand abgeschnitten.
+// Ein einzelnes, wiederverwendetes Element wird deshalb per getBoundingClientRect
+// frei über dem jeweiligen Status-Button positioniert (fixed).
+// =========================
+let taskStatusDropdownEl = null;
+function getTaskStatusDropdownEl() {
+  if (!taskStatusDropdownEl) {
+    taskStatusDropdownEl = document.createElement('div');
+    taskStatusDropdownEl.className = 'task-status-dropdown';
+    document.body.appendChild(taskStatusDropdownEl);
+  }
+  return taskStatusDropdownEl;
+}
+function closeTaskStatusDropdowns() {
+  if (taskStatusDropdownEl) taskStatusDropdownEl.classList.remove('open');
+}
+document.addEventListener('click', closeTaskStatusDropdowns);
+document.addEventListener('scroll', closeTaskStatusDropdowns, true);
+window.addEventListener('resize', closeTaskStatusDropdowns);
+
+function openTaskStatusDropdown(btn, task) {
+  const dropdown = getTaskStatusDropdownEl();
+  dropdown.innerHTML = '';
+  const currentStatus = taskStatusOf(task);
+  TASK_STATUS_ORDER.forEach(s => {
+    const sMeta = TASK_STATUS[s];
+    const opt = document.createElement('button');
+    opt.type = 'button';
+    opt.className = 'task-status-option' + (s === currentStatus ? ' active' : '');
+    opt.innerHTML = `<span class="task-status-option-icon" style="color:var(${sMeta.dotVar})">${sMeta.icon}</span>${sMeta.label}`;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setTaskStatus(task, s);
+      closeTaskStatusDropdowns();
+      saveTasks(); renderTasks(); renderBlocks();
+    });
+    dropdown.appendChild(opt);
+  });
+  const rect = btn.getBoundingClientRect();
+  dropdown.style.top  = (rect.bottom + 6) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  dropdown.dataset.forTask = task.id;
+  dropdown.classList.add('open');
+}
+
 function renderTasks() {
   const list  = document.getElementById('task-list');
   const empty = document.getElementById('task-empty');
   const count = document.getElementById('task-count');
+  const stats = document.getElementById('task-stats');
   list.innerHTML = '';
 
   const tileTasks  = getTasksForTile();
-  const openTasks  = tileTasks.filter(t => !t.done).sort((a,b) => a.priority - b.priority || a.title.localeCompare(b.title));
-  const doneTasks  = tileTasks.filter(t =>  t.done).sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
+  // "Offen" umfasst hier weiterhin offen + in Bearbeitung — bestehende Sortierung/
+  // Aufteilung (offen oben, Erledigt-Trenner unten) bleibt unverändert, nur die
+  // Statusanzeige je Aufgabe kommt neu dazu (siehe buildTaskItem).
+  const openTasks  = tileTasks.filter(t => !isTaskCompleted(t)).sort((a,b) => a.priority - b.priority || a.title.localeCompare(b.title));
+  const doneTasks  = tileTasks.filter(t =>  isTaskCompleted(t)).sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
 
   count.textContent = openTasks.length || '';
+
+  if (stats) {
+    if (tileTasks.length === 0) {
+      stats.classList.add('hidden'); stats.innerHTML = '';
+    } else {
+      const completedCount = tileTasks.filter(t => taskStatusOf(t) === 'completed').length;
+      const progressCount  = tileTasks.filter(t => taskStatusOf(t) === 'in_progress').length;
+      const openCount      = tileTasks.length - completedCount - progressCount;
+      const completedPct   = Math.round((completedCount / tileTasks.length) * 100);
+      const progressPct    = Math.round((progressCount  / tileTasks.length) * 100);
+      stats.classList.remove('hidden');
+      stats.innerHTML = `
+        <span class="task-stat"><span class="task-stat-dot" style="background:var(${TASK_STATUS.completed.dotVar})"></span>${completedCount} abgeschlossen</span>
+        <span class="task-stat"><span class="task-stat-dot" style="background:var(${TASK_STATUS.in_progress.dotVar})"></span>${progressCount} in Bearbeitung</span>
+        <span class="task-stat"><span class="task-stat-dot" style="background:var(${TASK_STATUS.open.dotVar})"></span>${openCount} offen</span>
+        <span class="task-stat-pct">${completedPct}% abgeschlossen · ${progressPct}% aktiv</span>
+      `;
+    }
+  }
+
   if (tileTasks.length === 0) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
 
@@ -641,13 +714,38 @@ function renderTasks() {
   }
 }
 
-function buildTaskItem(task) {
-  const li = document.createElement('li'); li.className = 'task-item' + (task.done ? ' done' : '');
-  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = task.done;
-  cb.addEventListener('change', () => {
-    task.done = cb.checked; task.completedAt = cb.checked ? Date.now() : null;
-    saveTasks(); renderTasks(); renderBlocks();
+// Statuskontrolle je Aufgabe: Klick öffnet ein kleines Dropdown mit allen drei
+// Stufen (offen/in Bearbeitung/abgeschlossen), sodass der Status in eine beliebige
+// Richtung geändert werden kann — auch rückwärts, für Korrekturen.
+function buildTaskStatusControl(task) {
+  const status = taskStatusOf(task);
+  const meta   = TASK_STATUS[status];
+
+  const wrap = document.createElement('div'); wrap.className = 'task-status-wrap';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'task-status-btn';
+  btn.title = `${meta.label} — Status ändern`;
+  btn.textContent = meta.icon;
+  btn.style.color = `var(${meta.dotVar})`;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpenForThis = taskStatusDropdownEl
+      && taskStatusDropdownEl.classList.contains('open')
+      && taskStatusDropdownEl.dataset.forTask === task.id;
+    closeTaskStatusDropdowns();
+    if (!isOpenForThis) openTaskStatusDropdown(btn, task);
   });
+
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function buildTaskItem(task) {
+  const status = taskStatusOf(task);
+  const li = document.createElement('li');
+  li.className = 'task-item task-status-' + status + (status === 'completed' ? ' done' : '');
+  const statusCtrl = buildTaskStatusControl(task);
   const dot   = document.createElement('div'); dot.className = 'prio-dot'; dot.dataset.prio = task.priority;
   const info  = document.createElement('div'); info.className = 'task-info';
   const title = document.createElement('span'); title.className = 'task-title'; title.textContent = task.title;
@@ -660,7 +758,7 @@ function buildTaskItem(task) {
   badge.textContent = _blockIds.length ? _blockIds.map(b => `B${b}`).join(' ') : '–';
   const del   = document.createElement('button'); del.className = 'task-delete'; del.textContent = '✕';
   del.addEventListener('click', () => { tasks = tasks.filter(t => t.id !== task.id); saveTasks(); renderTasks(); renderBlocks(); });
-  li.append(cb, dot, info, badge, del);
+  li.append(statusCtrl, dot, info, badge, del);
   return li;
 }
 
@@ -678,6 +776,7 @@ const taskModal = wireModal('modal-overlay', {
 function openTaskModal(existingTask = null) {
   state.editingTask = existingTask;
   state.selectedPriority = existingTask ? existingTask.priority : 2;
+  state.selectedStatus = existingTask ? taskStatusOf(existingTask) : 'open';
   document.getElementById('modal-title').textContent = existingTask ? 'Aufgabe bearbeiten' : 'Neue Aufgabe';
   document.getElementById('modal-task-input').value = existingTask ? existingTask.title : '';
   document.getElementById('modal-task-notes').value = existingTask?.notes || '';
@@ -700,6 +799,7 @@ function openTaskModal(existingTask = null) {
     chipsWrap.appendChild(chip);
   });
   document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.prio) === state.selectedPriority));
+  document.querySelectorAll('#status-picker .status-btn').forEach(b => b.classList.toggle('active', b.dataset.status === state.selectedStatus));
   taskModal.open();
   setTimeout(() => document.getElementById('modal-task-input').focus(), 50);
 }
@@ -713,6 +813,12 @@ document.querySelectorAll('.prio-btn').forEach(btn => {
     document.querySelectorAll('.prio-btn').forEach(b => b.classList.toggle('active', b === btn));
   });
 });
+document.querySelectorAll('#status-picker .status-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.selectedStatus = btn.dataset.status;
+    document.querySelectorAll('#status-picker .status-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
 document.getElementById('modal-save').addEventListener('click', () => {
   const title = document.getElementById('modal-task-input').value.trim(); if (!title) return;
   // Collect selected block IDs from chips
@@ -721,10 +827,13 @@ document.getElementById('modal-save').addEventListener('click', () => {
   const notesTxt = document.getElementById('modal-task-notes').value.trim();
   if (state.editingTask) {
     Object.assign(state.editingTask, { title, blocks: selectedBlocks, priority: state.selectedPriority, notes: notesTxt });
+    setTaskStatus(state.editingTask, state.selectedStatus);
     // Remove legacy field to keep data clean
     delete state.editingTask.block;
   } else {
-    tasks.push({ id: crypto.randomUUID(), title, notes: notesTxt, priority: state.selectedPriority, blocks: selectedBlocks, done: false, createdAt: Date.now(), completedAt: null });
+    const newTask = { id: crypto.randomUUID(), title, notes: notesTxt, priority: state.selectedPriority, blocks: selectedBlocks, createdAt: Date.now() };
+    setTaskStatus(newTask, state.selectedStatus);
+    tasks.push(newTask);
   }
   saveTasks(); closeTaskModal(); renderTasks(); renderBlocks();
 });

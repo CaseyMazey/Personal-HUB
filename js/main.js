@@ -25,6 +25,7 @@ const state = {
   currentWeekId: null,
   editingTask: null,
   selectedPriority: 2,
+  selectedStatus: 'open',
   editingEvent: null,
   activeSubjectId: null,
   activeGuideCategoryId: null,
@@ -34,9 +35,42 @@ const state = {
 };
 
 // =========================
+// TASK STATUS — zentrale 3-Stufen-Statuslogik (offen / in Bearbeitung / abgeschlossen)
+// Zentral in main.js definiert (statt dupliziert in today.js/calendar.js), weil main.js
+// als erstes Skript lädt und bereits den `tasks`-State sowie dessen Query-Helper besitzt.
+// Andere Module (z.B. Projects) verwenden aktuell noch ein einfaches done-Bool auf einem
+// anderen Datenmodell (project.tasks) — falls sie später denselben 3-Stufen-Status
+// brauchen, ist diese Registry der Ort dafür.
+// =========================
+
+const TASK_STATUS_ORDER = ['open', 'in_progress', 'completed'];
+const TASK_STATUS = {
+  open:        { label: 'Offen',          icon: '○', dotVar: '--text-3' },
+  in_progress: { label: 'In Bearbeitung', icon: '◐', dotVar: '--amber'  },
+  completed:   { label: 'Abgeschlossen',  icon: '✓', dotVar: '--sage'   },
+};
+
+// Liest den Status eines Tasks — fällt für Alt-Daten ohne `status`-Feld auf das
+// bisherige `done`-Bool zurück, damit nichts migriert werden muss, bevor es gelesen wird.
+function taskStatusOf(t) {
+  return (t && TASK_STATUS[t.status]) ? t.status : (t && t.done ? 'completed' : 'open');
+}
+function isTaskCompleted(t) { return taskStatusOf(t) === 'completed'; }
+
+// Setzt den Status und hält das abgeleitete `done`-Bool synchron, damit Module,
+// die weiterhin `task.done` lesen (z.B. calendar.js), korrekt bleiben:
+// "in_progress" gilt dort — wie überall sonst — ausdrücklich NICHT als erledigt.
+function setTaskStatus(t, status) {
+  if (!TASK_STATUS[status]) return;
+  t.status = status;
+  t.done = status === 'completed';
+  t.completedAt = status === 'completed' ? Date.now() : null;
+}
+
+// =========================
 // TASKS — Migration altes → neues Format
 // Altes Format: tasks = { "2025-W23": [{...}] }
-// Neues Format: tasks = [ {id,title,done,createdAt,completedAt,...} ]
+// Neues Format: tasks = [ {id,title,done,status,createdAt,completedAt,...} ]
 // =========================
 
 (function migrateTasksIfNeeded() {
@@ -57,15 +91,17 @@ const state = {
       weekStart = day1.getTime();
     } catch { /* fallback to now */ }
     weekTasks.forEach(t => {
+      const status = TASK_STATUS[t.status] ? t.status : (t.done ? 'completed' : 'open');
       migrated.push({
         id:          t.id || crypto.randomUUID(),
         title:       t.title || '',
         notes:       t.notes || '',
         priority:    t.priority || 2,
         block:       t.block || 1,
-        done:        t.done || false,
+        done:        status === 'completed',
+        status,
         createdAt:   t.createdAt || weekStart,
-        completedAt: t.completedAt || (t.done ? weekStart : null),
+        completedAt: t.completedAt || (status === 'completed' ? weekStart : null),
       });
     });
   });
@@ -74,6 +110,25 @@ const state = {
 })();
 
 let tasks            = DB.get('tasks', []);
+
+// Backfill für bereits im neuen Array-Format gespeicherte Tasks ohne `status`-Feld
+// (z.B. aus einer Version vor Einführung des 3-Stufen-Status). Läuft bei jedem Start,
+// ist aber ein no-op sobald alle Tasks ein gültiges `status`-Feld besitzen — daher
+// bewusst nicht auf eine einmalige Migration beschränkt, sondern als transparenter
+// Konsistenz-Check, der auch `done` stets synchron zu `status` hält.
+(function migrateTaskStatusIfNeeded() {
+  let changed = false;
+  tasks.forEach(t => {
+    if (!TASK_STATUS[t.status]) {
+      t.status = t.done ? 'completed' : 'open';
+      changed = true;
+    }
+    const shouldBeDone = t.status === 'completed';
+    if (t.done !== shouldBeDone) { t.done = shouldBeDone; changed = true; }
+  });
+  if (changed) DB.set('tasks', tasks);
+})();
+
 let notes            = DB.get('notes', { 'exam-notes': [], 'class-questions': [], 'terms': [] });
 let events           = DB.get('events', {});
 // Terminserien (wiederkehrende Termine) — getrennt von den Einzelterminen in `events`,
@@ -214,7 +269,8 @@ function dayEnd(date) {
 /**
  * Tasks für einen Kalendertag — korrekte Logik:
  *
- * OFFENE TASKS:
+ * NICHT ABGESCHLOSSENE TASKS (offen ODER in Bearbeitung — "in_progress" zählt
+ * hier ausdrücklich NICHT als erledigt):
  *   createdAt <= Ende des Tages
  *   UND Kalender-Tag <= heute
  *   → NICHT auf zukünftige Tage projizieren
@@ -235,8 +291,8 @@ function getTasksForCalendarDay(date) {
     // Task muss vor oder an diesem Tag erstellt worden sein
     if (created > dEnd) return false;
 
-    if (!t.done) {
-      // OFFENER TASK:
+    if (!isTaskCompleted(t)) {
+      // OFFEN oder IN BEARBEITUNG:
       // Nur anzeigen wenn der Kalender-Tag nicht in der Zukunft liegt.
       // dStart > todayEnd bedeutet: dieser Kalendertag ist noch nicht angebrochen.
       return dStart <= todayEnd;
@@ -264,7 +320,7 @@ function getTasksForTile() {
   return tasks.filter(t => {
     const created = t.createdAt || 0;
     if (created >= weekMonNext) return false;
-    if (!t.done) return true;
+    if (!isTaskCompleted(t)) return true;
     const completed = t.completedAt || 0;
     return completed >= sevenDaysAgo;
   });

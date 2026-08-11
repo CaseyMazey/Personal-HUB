@@ -231,7 +231,7 @@
    Override: kompaktere Spalten, weniger Padding.
 ========================= */
 .task-item {
-  grid-template-columns: 16px 6px 1fr auto auto;
+  grid-template-columns: 18px 6px 1fr auto auto;
   gap: 7px;
   padding: 9px 14px;
 }
@@ -266,3 +266,74 @@
   color: var(--sage-dark, var(--sage));
   font-weight: 500;
 }
+
+/* =========================
+   AUFGABEN-STATISTIK — Übersicht über die drei Status
+   (offen / in Bearbeitung / abgeschlossen), automatisch berechnet.
+========================= */
+.task-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 14px 10px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--text-2);
+}
+.task-stats.hidden { display: none; }
+.task-stat { display: flex; align-items: center; gap: 5px; }
+.task-stat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.task-stat-pct { color: var(--text-3); margin-left: auto; }
+
+/* =========================
+   STATUS-KONTROLLE je Aufgabe — ersetzt die reine Checkbox durch einen
+   dreistufigen Status (○ offen / ◐ in Bearbeitung / ✓ abgeschlossen),
+   umschaltbar über ein kleines Dropdown. Gleiches Interaktionsmuster wie
+   guide-detail-menu-dropdown (Anleitungen), für visuelle Konsistenz.
+========================= */
+.task-status-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+.task-status-btn {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 10.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.task-status-btn:hover { background: var(--accent-soft); }
+.task-item.task-status-in_progress .task-status-btn { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+.task-item.task-status-completed   .task-status-btn { border-color: var(--sage);  background: var(--sage-bg); }
+
+.task-status-dropdown {
+  display: none;
+  /* fixed statt absolute: das Element hängt an <body> (siehe today.js), damit
+     es nicht vom overflow:hidden des umgebenden .panel abgeschnitten wird. */
+  position: fixed; z-index: 90;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+}
+.task-status-dropdown.open { display: flex; }
+.task-status-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px; border-radius: var(--radius-sm);
+  font-size: 12.5px; color: var(--text-2); text-align: left;
+  background: none; border: none; cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.task-status-option:hover { background: var(--accent-soft); color: var(--text); }
+.task-status-option.active { color: var(--text); font-weight: 600; background: var(--accent-soft); }
+.task-status-option-icon { width: 14px; text-align: center; flex-shrink: 0; }
+
+/* Block-Ansicht — Status-Icon-Präfix vor dem Titel, zusätzlich zur
+   bestehenden .block-task-done-Regel (index.html) für "abgeschlossen". */
+.block-tasks li.block-task-status-in_progress { color: var(--amber); }

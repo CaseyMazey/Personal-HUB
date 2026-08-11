@@ -757,6 +757,26 @@ ul { list-style: none; }
 .prio-btn.active[data-prio="2"] { background: var(--prio-2-bg); color: var(--prio-2); border-color: var(--prio-2); }
 .prio-btn.active[data-prio="3"] { background: var(--prio-3-bg); color: var(--prio-3); border-color: var(--prio-3); }
 
+/* Status-Picker im Aufgaben-Modal — gleiches Muster wie #priority-picker,
+   Farben abgeleitet aus den bestehenden Tokens (--text-3/--amber/--sage). */
+#status-picker { display: flex; gap: 6px; }
+.status-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface-2);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.status-btn:hover { background: var(--accent-soft); color: var(--text); border-color: var(--border-strong); }
+.status-btn.active[data-status="open"]        { background: var(--surface-3); color: var(--text-2); border-color: var(--border-strong); }
+.status-btn.active[data-status="in_progress"] { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); border-color: var(--amber); }
+.status-btn.active[data-status="completed"]   { background: var(--sage-bg); color: var(--sage-dark); border-color: var(--sage); }
+
 .toggle-select-btn {
   flex: 1;
   padding: 9px 16px;
