@@ -283,6 +283,21 @@ function sparplanForGoal(goalId){
   return budgetSavingsPlans.find(p => p.goalId === goalId) || null;
 }
 
+// Anzeige-Baustein für "wird reserviert"-Hinweise (Sparplan-Detailansicht,
+// Wizard-Vorschau auf ein vorhandenes Sparziel): meldet je nachdem, ob die
+// Reservierung bereits wirkt (goalReservationIsActive(), budget-financing.js)
+// oder erst ab dem Startdatum des verknüpften Sparplans greift (siehe dort).
+// Reine Text-Bausteine, keine eigene Berechnung — einzige Quelle der
+// Wahrheit für "ist reserviert aktiv" bleibt goalReservationIsActive().
+function goalReservationNote(goal, activeText, pendingTextTemplate){
+  if (!goal.reserveActive) return '';
+  const isActive = typeof goalReservationIsActive === 'function' ? goalReservationIsActive(goal) : true;
+  if (isActive) return activeText;
+  const linkedPlan = sparplanForGoal(goal.id);
+  if (!linkedPlan || !linkedPlan.startDate) return activeText;
+  return pendingTextTemplate.replace('{datum}', sparplanFormatDate(linkedPlan.startDate));
+}
+
 // Monats-Äquivalent der offenen Raten eines Plans — Grundlage für die
 // Reservierungsrechnung, da Sparpläne unterschiedliche Intervalle haben
 // können (täglich/wöchentlich/...), die Sparprognose aber monatlich
@@ -464,7 +479,7 @@ function renderSpwGoalFundingExisting(){
     return;
   }
   const label = typeof fundingBreakdownLabel === 'function' ? fundingBreakdownLabel(goal.funding) : '';
-  el.textContent = label + (goal.reserveActive ? ' · wird automatisch reserviert' : '');
+  el.textContent = label + goalReservationNote(goal, ' · wird automatisch reserviert', ' · wird ab {datum} automatisch reserviert');
 }
 
 // Übernimmt Start-/Zieldatum und Name aus einem vorhandenen Sparziel in
@@ -1098,8 +1113,9 @@ function renderSparplanDetailBody() {
   // Finanzierung — lebt seit der Sparziele-Umstellung am verknüpften
   // Sparziel, nicht mehr am Plan selbst (budget-financing.js: goal.funding).
   const fundingLabel = linkedGoal ? fundingBreakdownLabel(linkedGoal.funding) : '';
+  const reserveNote = linkedGoal ? goalReservationNote(linkedGoal, ' (reserviert)', ' (reserviert ab {datum})') : '';
   const fundingRow = fundingLabel
-    ? `<div class="sp-detail-row"><span>Finanzierung</span><span>${fundingLabel}${linkedGoal.reserveActive ? ' (reserviert)' : ''}</span></div>`
+    ? `<div class="sp-detail-row"><span>Finanzierung</span><span>${fundingLabel}${reserveNote}</span></div>`
     : '';
 
   body.innerHTML = `

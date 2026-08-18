@@ -194,6 +194,29 @@ function resolveIncomeIcon(recurringId, name){
   return incomeIcon(name);
 }
 
+// ── Sparplan-Startdatum: reservierte Sparziel-Beträge zählen erst ab dem
+// Startdatum des verknüpften Sparplans ────────────────────────────────
+// Ein Sparziel kann reserveActive sein, obwohl der verknüpfte Sparplan
+// (falls vorhanden — sparplanForGoal() lebt in budget-sparplaene.js, das
+// NACH dieser Datei lädt, daher defensiv per typeof geprüft) erst in der
+// Zukunft beginnt. Vor diesem Startdatum darf die Reservierung nirgends
+// wirken (weder Finanzierung/Geldfluss-Planer noch Sparplan-Prognose) —
+// erst AB dem Startdatum (inklusive) zählt sie wie gewohnt. Nur target-/
+// rate-Sparpläne haben ein echtes Kalender-Startdatum; "Individuell"-
+// Pläne (method:'custom', startDate:null) und Sparziele ganz ohne
+// verknüpften Plan sind davon unberührt und reservieren wie bisher sofort.
+// EINZIGE Stelle, die diese Regel kennt — alle Funktionen unten prüfen
+// ausschließlich hierüber, nie g.reserveActive direkt (Schulden/Debts
+// kennen kein Sparplan-Konzept und bleiben unverändert bei d.reserveActive).
+function goalReservationIsActive(goal){
+  if (!goal.reserveActive) return false;
+  const linkedPlan = typeof sparplanForGoal === 'function' ? sparplanForGoal(goal.id) : null;
+  if (!linkedPlan || !linkedPlan.startDate) return true;
+  const now = new Date();
+  const todayStr = isoDateYMD(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  return linkedPlan.startDate <= todayStr;
+}
+
 // ── Engine: Zuordnung je Einnahme, über ALLE Verbraucher hinweg ────
 // monthKey ist optional und wird ausschließlich für einmalige Ausgaben
 // ausgewertet (die gelten nur in ihrem eigenen Monat) — wiederkehrende
@@ -208,7 +231,7 @@ function financingAllocatedForIncome(recurringId, monthKey){
     (e.funding || []).forEach(f => { if (f.sourceId === recurringId) total += f.amount; });
   });
   budgetGoals.forEach(g => {
-    if (!g.reserveActive) return;
+    if (!goalReservationIsActive(g)) return;
     (g.funding || []).forEach(f => { if (f.sourceId === recurringId) total += f.amount; });
   });
   budgetDebts.forEach(d => {
@@ -235,7 +258,7 @@ function financingBreakdownForIncome(recurringId, monthKey){
     (e.funding || []).forEach(f => { if (f.sourceId === recurringId && f.amount > 0) items.push({ name: e.name, amount: f.amount, kind: 'Einmalig' }); });
   });
   budgetGoals.forEach(g => {
-    if (!g.reserveActive) return;
+    if (!goalReservationIsActive(g)) return;
     (g.funding || []).forEach(f => { if (f.sourceId === recurringId && f.amount > 0) items.push({ name: g.name, amount: f.amount, kind: 'Sparziel' }); });
   });
   budgetDebts.forEach(d => {
@@ -279,12 +302,12 @@ function financingWarningsForConsumer(funding, totalAmount){
 // einmal bei der Zielprognose ignoriert), was die ETA fälschlich nach
 // hinten verschiebt (gemeldeter Berechnungsfehler).
 function goalOwnMonthlyReserved(goal){
-  if (!goal.reserveActive) return 0;
+  if (!goalReservationIsActive(goal)) return 0;
   return round2((goal.funding || []).reduce((s, f) => s + f.amount, 0));
 }
 function sparplanTotalReserved(){
   const goalsTotal = budgetGoals
-    .filter(g => g.reserveActive && !g.archived)
+    .filter(g => goalReservationIsActive(g) && !g.archived)
     .reduce((s, g) => s + (g.funding || []).reduce((s2, f) => s2 + f.amount, 0), 0);
   const debtsTotal = budgetDebts
     .filter(d => d.reserveActive && !d.archived)
@@ -294,7 +317,7 @@ function sparplanTotalReserved(){
 function sparplanReservedForIncome(recurringId){
   let total = 0;
   budgetGoals.forEach(g => {
-    if (!g.reserveActive || g.archived) return;
+    if (!goalReservationIsActive(g) || g.archived) return;
     (g.funding || []).forEach(f => { if (f.sourceId === recurringId) total += f.amount; });
   });
   budgetDebts.forEach(d => {
