@@ -708,6 +708,17 @@ document.getElementById('recur-scope-all').addEventListener('click', () => {
 // Multi-day ranges rendered as continuous colored bars
 // =========================
 
+// Aufgaben mit Status "Geplant" (open) sollen im Kalender GAR NICHT
+// erscheinen — nur tatsächlich begonnene ("in Bearbeitung") oder
+// abgeschlossene Aufgaben zählen hier als Kalender-Aufgabe. Die Tasks
+// selbst und ihr Status bleiben unangetastet — reiner Anzeigefilter für
+// den Kalender. getTasksForCalendarDay() (main.js) bleibt unverändert
+// und wird weiterhin unverändert von today.js (Block-Ansicht) genutzt,
+// die "Geplant"-Aufgaben bewusst weiterhin zeigt.
+function getCalendarTasksForDay(date) {
+  return getTasksForCalendarDay(date).filter(t => taskStatusOf(t) !== 'open');
+}
+
 let calDate = new Date();
 
 function renderCalendar() {
@@ -758,7 +769,7 @@ function renderCalendar() {
 
       // All events visible on this day (single + multi-day + recurring)
       const dayEventEntries = getEventsForDay(dateTime);
-      let   dayTasks         = calendarSettings.showTasks ? getTasksForCalendarDay(date) : [];
+      let   dayTasks         = calendarSettings.showTasks ? getCalendarTasksForDay(date) : [];
       if (!calendarSettings.showDoneTasks) dayTasks = dayTasks.filter(t => !t.done);
 
       const el = document.createElement('div');
@@ -914,8 +925,11 @@ function openCalDayModal(key, date) {
 
   const dateTime = new Date(date); dateTime.setHours(0,0,0,0);
   const dayEventEntries = getEventsForDay(dateTime);
-  const dayTasks  = calendarSettings.showTasks ? getTasksForCalendarDay(date) : [];
-  const openTasks = dayTasks.filter(t => !t.done);
+  const dayTasks = calendarSettings.showTasks ? getCalendarTasksForDay(date) : [];
+  // Geplante Aufgaben sind hier durch getCalendarTasksForDay() bereits
+  // herausgefiltert — "nicht erledigt" bedeutet an dieser Stelle also
+  // ausschließlich "in Bearbeitung".
+  const inProgressTasks = dayTasks.filter(t => !t.done);
   const doneTasks = calendarSettings.showDoneTasks ? dayTasks.filter(t => t.done) : [];
 
   if (dayEventEntries.length === 0 && dayTasks.length === 0) {
@@ -980,10 +994,10 @@ function openCalDayModal(key, date) {
     });
   }
 
-  // ── Offene Aufgaben ───────────────────────────────────────
-  if (openTasks.length > 0) {
-    const head = document.createElement('div'); head.className = 'cal-day-section-head'; head.textContent = 'Offene Aufgaben'; content.appendChild(head);
-    openTasks.forEach(t => {
+  // ── In Bearbeitung ────────────────────────────────────────
+  if (inProgressTasks.length > 0) {
+    const head = document.createElement('div'); head.className = 'cal-day-section-head'; head.textContent = 'In Bearbeitung'; content.appendChild(head);
+    inProgressTasks.forEach(t => {
       const row  = document.createElement('div'); row.className = 'cal-day-ev-row';
       const left = document.createElement('div'); left.className = 'cal-day-ev-left';
       const dot  = document.createElement('span'); dot.className = 'cal-task-dot'; dot.dataset.prio = t.priority; left.appendChild(dot);
@@ -1302,7 +1316,7 @@ function renderCalStatsCard() {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d);
     const dayEvs = getEventsForDay(date);
-    const dayTasks = (calendarSettings.showTasks && typeof getTasksForCalendarDay === 'function') ? getTasksForCalendarDay(date) : [];
+    const dayTasks = (calendarSettings.showTasks && typeof getCalendarTasksForDay === 'function') ? getCalendarTasksForDay(date) : [];
     dayEvs.forEach(({ ev }) => eventIds.add(ev.id));
     dayTasks.forEach(t => { taskIds.add(t.id); if (t.done) doneTaskIds.add(t.id); });
     // Nur bereits vergangene Tage (inkl. heute) zählen als "aktiv" —
