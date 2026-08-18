@@ -605,8 +605,16 @@ wireGamePlayModal();
 
 // =========================
 // STATS-MODAL
-// Zeigt einfach das an, was game.getStats() zurückgibt — der Hub kennt
-// keine einzelne Stat-Bedeutung, nur das generische {label, value}-Format.
+// Standardmäßig zeigt der Hub einfach an, was game.getStats() zurückgibt —
+// er kennt keine einzelne Stat-Bedeutung, nur das generische
+// {label, value}-Format. Ein Spiel mit umfangreicherem Datenmodell (z.B.
+// TTT) kann stattdessen ein eigenes game.renderStats() bereitstellen, das
+// fertiges HTML liefert (Kennzahlen-Karten, Aufschlüsselungen etc.) —
+// der Hub reicht das nur durch, ohne die Bedeutung zu kennen. Wichtig:
+// renderStats() muss ohne die lazy-geladene Spiellogik (<id>.js)
+// auskommen, weil das Stats-Modal auch ganz ohne "Spielen"-Klick
+// (also ohne geladenes <id>.js) geöffnet werden kann — daher lebt es
+// in manifest.js, nicht in <id>.js.
 // =========================
 
 function openGameStatsModal(gameId) {
@@ -616,22 +624,27 @@ function openGameStatsModal(gameId) {
   document.getElementById('games-stats-modal-icon').textContent = game.icon || '📊';
   document.getElementById('games-stats-modal-name').textContent = game.title;
 
-  const stats = typeof game.getStats === 'function' ? game.getStats() : [];
-  const highscores = typeof game.getHighscores === 'function' ? game.getHighscores() : [];
   const body = document.getElementById('games-stats-modal-body');
 
-  const renderRows = list => list.map(s => `
-    <div class="games-stats-row">
-      <span class="games-stats-label">${s.label}</span>
-      <span class="games-stats-value">${s.value}</span>
-    </div>`).join('');
-
-  if (!stats.length && !highscores.length) {
-    body.innerHTML = `<p class="games-play-loading">Noch keine Statistiken vorhanden.</p>`;
+  if (typeof game.renderStats === 'function') {
+    body.innerHTML = game.renderStats();
   } else {
-    body.innerHTML =
-      renderRows(stats) +
-      (highscores.length ? `<div class="games-stats-subheading">Bestenliste</div>${renderRows(highscores)}` : '');
+    const stats = typeof game.getStats === 'function' ? game.getStats() : [];
+    const highscores = typeof game.getHighscores === 'function' ? game.getHighscores() : [];
+
+    const renderRows = list => list.map(s => `
+      <div class="games-stats-row">
+        <span class="games-stats-label">${s.label}</span>
+        <span class="games-stats-value">${s.value}</span>
+      </div>`).join('');
+
+    if (!stats.length && !highscores.length) {
+      body.innerHTML = `<p class="games-play-loading">Noch keine Statistiken vorhanden.</p>`;
+    } else {
+      body.innerHTML =
+        renderRows(stats) +
+        (highscores.length ? `<div class="games-stats-subheading">Bestenliste</div>${renderRows(highscores)}` : '');
+    }
   }
 
   document.getElementById('games-stats-modal-overlay').classList.remove('hidden');

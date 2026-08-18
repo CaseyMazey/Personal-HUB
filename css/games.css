@@ -312,6 +312,129 @@
 }
 
 /* =========================
+   STATISTIK-DASHBOARD (generisch)
+   Wiederverwendbare Bausteine für game.renderStats() — aktuell von TTT
+   genutzt, aber bewusst spielunabhängig benannt, damit weitere Spiele mit
+   eigenem Datenmodell dasselbe Dashboard-Layout bekommen können.
+========================= */
+
+.games-stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.games-stats-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.games-stats-card-icon {
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.games-stats-card-value {
+  font-size: 17px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.games-stats-card-label {
+  font-size: 10.5px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.games-stats-section-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.games-stats-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.games-stats-group {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.games-stats-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.games-stats-group-winrate {
+  font-family: var(--mono);
+  color: var(--sage);
+  font-weight: 700;
+}
+
+.games-stats-group-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.games-stats-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.games-stats-mini span {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.games-stats-mini small {
+  font-size: 9.5px;
+  color: var(--text-3);
+}
+
+.games-stats-subline {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.games-stats-insights {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 12px;
+}
+
+.games-stats-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* =========================
    BADGE
 ========================= */
 

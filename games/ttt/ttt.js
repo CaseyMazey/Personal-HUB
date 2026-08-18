@@ -94,6 +94,11 @@
     return empty[Math.floor(Math.random() * empty.length)];
   }
 
+  // Historie wird nach oben begrenzt, damit localStorage nicht unbegrenzt
+  // wächst — für die Statistik-Aufschlüsselungen im Dashboard reichen die
+  // letzten paar tausend Partien bei Weitem.
+  const HISTORY_LIMIT = 2000;
+
   function handleEnd(r) {
     if (r.winner === 'draw') state.scores.draw++;
     else state.scores[r.winner] = (state.scores[r.winner] || 0) + 1;
@@ -103,6 +108,22 @@
     if (r.winner === 'X') all.ttt.playerWins = (all.ttt.playerWins || 0) + 1;
     else if (r.winner === 'O') all.ttt.opponentWins = (all.ttt.opponentWins || 0) + 1;
     else all.ttt.draws = (all.ttt.draws || 0) + 1;
+
+    // Detaillierte Spielhistorie fürs Statistik-Dashboard (manifest.js
+    // renderStats()). Ältere Partien vor dieser Erweiterung besitzen kein
+    // history-Array und zählen weiterhin nur in den Summen oben mit.
+    if (!Array.isArray(all.ttt.history)) all.ttt.history = [];
+    all.ttt.history.push({
+      variant: state.variant,
+      mode: state.vsAI ? 'ai' : 'p2',
+      difficulty: state.vsAI ? state.difficulty : null,
+      result: r.winner === 'X' ? 'win' : (r.winner === 'O' ? 'loss' : 'draw'),
+      ts: Date.now()
+    });
+    if (all.ttt.history.length > HISTORY_LIMIT) {
+      all.ttt.history = all.ttt.history.slice(-HISTORY_LIMIT);
+    }
+
     DB.set('gameHighscores', all);
 
     state.gameOver = true;
