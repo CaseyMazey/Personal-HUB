@@ -518,10 +518,18 @@ function initBudgetSubtabs() {
       btn.addEventListener('click', () => setBudgetSubtab(tab));
     }
   });
-  // Gespeicherten Zustand einmalig anwenden (ohne renderSparplaner erneut zu triggern)
+  // Gespeicherten Zustand einmalig anwenden. renderSparplaner() NICHT
+  // erneut triggern — läuft direkt im Anschluss ohnehin unconditional am
+  // Ende von renderBudget(). Die anderen Sub-Tabs brauchen hier aber
+  // ihren eigenen Render-Aufruf: sonst bleibt der zuletzt aktive Sub-Tab
+  // nach einem Seiten-Reload leer, weil er sonst nur bei einem Klick auf
+  // den Reiter gerendert wird (siehe setBudgetSubtab() oben).
   if (!initBudgetSubtabs._applied) {
     initBudgetSubtabs._applied = true;
     applyBudgetSubtabVisibility(budgetActiveSubtab);
+    if (budgetActiveSubtab === 'sparziele')  { if (typeof renderSparziele === 'function') renderSparziele(); }
+    if (budgetActiveSubtab === 'sparplaene') renderSparplaene();
+    if (budgetActiveSubtab === 'schulden')   { if (typeof renderSchulden === 'function') renderSchulden(); }
   }
 }
 
@@ -1828,9 +1836,11 @@ function renderFinanzgarten() {
     ? kontostand.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €'
     : '—';
 
-  // Active goal — persisted by ID
+  // Active goal — persisted by ID. Archivierte Ziele (siehe archiveGoal()
+  // in budget-sparziele.js) sind erledigt und daher hier nicht mehr wählbar.
+  const gardenGoals = budgetGoals.filter(g => !g.archived);
   let activeGoalId = DB.get('gardenActiveGoalId', null);
-  let activeGoal   = budgetGoals.find(g => g.id === activeGoalId) || budgetGoals[0] || null;
+  let activeGoal   = gardenGoals.find(g => g.id === activeGoalId) || gardenGoals[0] || null;
   if (activeGoal && activeGoal.id !== activeGoalId) DB.set('gardenActiveGoalId', activeGoal.id);
 
   let goalPct = 0, goalStage = 'seed';
@@ -1849,7 +1859,7 @@ function renderFinanzgarten() {
         <span class="b-garden-emoji">🌿</span>
         <span class="b-garden-title">Finanzgarten</span>
       </div>
-      ${budgetGoals.length > 0 ? `
+      ${gardenGoals.length > 0 ? `
         <button class="b-garden-select-btn" id="garden-select-goal-btn">
           ${activeGoal ? `${plantEmoji} ${activeGoal.name}` : 'Ziel wählen'}
           <span class="b-garden-select-arrow">▾</span>
@@ -1897,7 +1907,7 @@ function renderFinanzgarten() {
 
   // Goal selector dropdown — angehängt an body, um overflow:hidden der Card zu umgehen
   const selectBtn = card.querySelector('#garden-select-goal-btn');
-  if (selectBtn && budgetGoals.length > 0) {
+  if (selectBtn && gardenGoals.length > 0) {
     selectBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       // Bestehende Dropdowns entfernen
@@ -1907,7 +1917,7 @@ function renderFinanzgarten() {
       dd.id = 'garden-dropdown';
       dd.className = 'b-garden-dropdown';
 
-      budgetGoals.forEach(g => {
+      gardenGoals.forEach(g => {
         const item = document.createElement('button');
         item.className = 'b-garden-dropdown-item' + (g.id === activeGoal?.id ? ' active' : '');
         const emoji = PLANT_EMOJIS[g.plantType] || '🌱';
@@ -2098,8 +2108,11 @@ function renderBudgetTimeline(){
 function renderBudgetGoals(){
   const container = document.getElementById('budget-goals-list');
   container.innerHTML = '';
-  if (budgetGoals.length === 0) { container.innerHTML = '<div class="empty-state">Noch keine Sparziele.</div>'; return; }
-  budgetGoals.forEach(goal => {
+  // Archivierte Sparziele gehören ins Archiv (siehe archiveGoal() in
+  // budget-sparziele.js), nicht mehr in diese aktive Übersicht.
+  const visibleGoals = budgetGoals.filter(g => !g.archived);
+  if (visibleGoals.length === 0) { container.innerHTML = '<div class="empty-state">Noch keine Sparziele.</div>'; return; }
+  visibleGoals.forEach(goal => {
     const pct  = goal.target > 0 ? Math.min(100, Math.round((goal.current/goal.target)*100)) : 0;
     const card = document.createElement('div'); card.className = 'budget-goal-card';
     const head = document.createElement('div'); head.className = 'budget-goal-head';
@@ -2116,6 +2129,13 @@ function renderBudgetGoals(){
     const editBtn = document.createElement('button'); editBtn.className = 'budget-edit-btn';
     editBtn.title = 'Bearbeiten'; editBtn.innerHTML = '&#9998;';
     editBtn.addEventListener('click', e => { e.stopPropagation(); openEditGoalModal(goal); });
+    actions.append(editBtn);
+    if (typeof goalCompleted === 'function' && goalCompleted(goal)) {
+      const archiveBtn = document.createElement('button'); archiveBtn.className = 'budget-edit-btn';
+      archiveBtn.title = 'Archivieren'; archiveBtn.textContent = '📦';
+      archiveBtn.addEventListener('click', e => { e.stopPropagation(); archiveGoal(goal.id); });
+      actions.append(archiveBtn);
+    }
     const del  = document.createElement('button'); del.className = 'task-delete'; del.textContent = '✕';
     del.addEventListener('click', () => {
       budgetGoals = budgetGoals.filter(g => g.id !== goal.id);
@@ -2124,7 +2144,7 @@ function renderBudgetGoals(){
       if (activeId === goal.id) DB.set('gardenActiveGoalId', null);
       saveBudgetGoals(); renderBudgetGoals(); renderFinanzgarten(); renderSparplaner();
     });
-    actions.append(editBtn, del);
+    actions.append(del);
     head.append(nm, actions);
     const bar  = document.createElement('div'); bar.className = 'budget-goal-bar';
     const fill = document.createElement('div'); fill.className = 'budget-goal-fill'; fill.style.width = pct + '%';
@@ -2153,6 +2173,9 @@ let recurringFreq      = 'monthly';
 let recurringPriority  = 'need';
 let recurringCertainty = 'fixed';
 let recurringEditId    = null;
+// Nur für Einnahmen wählbar (siehe recurring-icon-row) — Standard, falls
+// noch nichts gewählt wurde. Ausgaben speichern kein Icon.
+let recurringIcon      = '💶';
 
 // Sichtbarkeit der Sparplaner-Zusatzfelder je nach Rhythmus/Sicherheit
 function updateRecurringSparplanFieldsVisibility() {
@@ -2176,6 +2199,11 @@ function updateRecurringFundingVisibility() {
   const show = recurringType === 'expense';
   document.getElementById('recurring-funding-row').classList.toggle('hidden', !show);
   document.getElementById('recurring-funding-list').classList.toggle('hidden', !show);
+}
+// Icon-Auswahl ist nur für Einnahmen sinnvoll — Ausgaben haben keine
+// eigene Icon-Anzeige (siehe resolveIncomeIcon() in budget-financing.js).
+function updateRecurringIconVisibility() {
+  document.getElementById('recurring-icon-row').classList.toggle('hidden', recurringType !== 'income');
 }
 function currentRecurringAmount() {
   return parseFloat(document.getElementById('recurring-amount').value) || 0;
@@ -2208,6 +2236,12 @@ function openRecurringModal(entry = null) {
     recurringFreq       = entry.freq;
     recurringPriority   = (entry.priority && entry.priority !== 'none') ? entry.priority : 'need';
     recurringCertainty  = entry.certainty === 'variable' ? 'variable' : 'fixed';
+    // Bereits gewähltes Icon übernehmen — bei alten Einnahmen ohne Icon
+    // (vor diesem Feature) die bisherige Namens-Heuristik als Startpunkt
+    // zeigen, damit der Picker nicht leer/beliebig wirkt.
+    recurringIcon = entry.type === 'income'
+      ? (entry.icon || (typeof incomeIcon === 'function' ? incomeIcon(entry.name) : '💶'))
+      : '💶';
     document.getElementById('recurring-var-min').value = entry.varMin ?? '';
     document.getElementById('recurring-var-max').value = entry.varMax ?? '';
     document.getElementById('recurring-sparplan-include').checked = entry.includeInSparplan !== false;
@@ -2237,6 +2271,7 @@ function openRecurringModal(entry = null) {
     document.getElementById('recurring-weekday').value = '1';
     document.getElementById('recurring-anchor-date').value = new Date().toISOString().slice(0,10);
     recurringType = 'income'; recurringFreq = 'monthly'; recurringPriority = 'need'; recurringCertainty = 'fixed';
+    recurringIcon = '💶';
     document.getElementById('recurring-sparplan-include').checked = true;
   }
 
@@ -2256,8 +2291,11 @@ function openRecurringModal(entry = null) {
   // Priority row: always visible, but dimmed for income entries
   document.getElementById('recurring-prio-row').classList.remove('hidden');
   document.getElementById('recurring-prio-row').classList.toggle('budget-prio-row-dimmed', recurringType !== 'expense');
+  document.querySelectorAll('#recurring-icon-picker .recurring-icon-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.icon === recurringIcon));
   updateRecurringSparplanFieldsVisibility();
   updateRecurringFundingVisibility();
+  updateRecurringIconVisibility();
   if (typeof renderFundingEditor === 'function') {
     renderFundingEditor(document.getElementById('recurring-funding-list'), (entry && entry.funding) || [], currentRecurringAmount, 'rec-funding');
   }
@@ -2275,6 +2313,14 @@ document.getElementById('add-recurring-btn').addEventListener('click', () => ope
       document.getElementById(`recurring-type-${x}`).classList.toggle('active', x === t));
     document.getElementById('recurring-prio-row').classList.toggle('budget-prio-row-dimmed', t !== 'expense');
     updateRecurringFundingVisibility();
+    updateRecurringIconVisibility();
+  });
+});
+document.querySelectorAll('#recurring-icon-picker .recurring-icon-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    recurringIcon = btn.dataset.icon;
+    document.querySelectorAll('#recurring-icon-picker .recurring-icon-btn').forEach(b =>
+      b.classList.toggle('active', b === btn));
   });
 });
 ['daily','weekly','biweekly','monthly','yearly'].forEach(f => {
@@ -2377,6 +2423,7 @@ document.getElementById('recurring-save').addEventListener('click', () => {
       e.freq     = recurringFreq;
       e.priority = recurringType === 'expense' ? recurringPriority : 'none';
       if (recurringType === 'expense') e.funding = fundingVal; else delete e.funding;
+      if (recurringType === 'income') e.icon = recurringIcon; else delete e.icon;
       applyPositionFields(e);
       applySparplanFields(e);
     }
@@ -2387,6 +2434,7 @@ document.getElementById('recurring-save').addEventListener('click', () => {
       priority: recurringType === 'expense' ? recurringPriority : 'none',
     };
     if (recurringType === 'expense') entry.funding = fundingVal;
+    if (recurringType === 'income') entry.icon = recurringIcon;
     applyPositionFields(entry);
     applySparplanFields(entry);
     budgetRecurring.push(entry);
@@ -2851,6 +2899,80 @@ document.getElementById('finanzbaum-config-save').addEventListener('click', () =
   DB.set('finanzbaumLevels', mins);
   finanzbaumModal.close();
   renderFinanzgarten();
+});
+
+// =========================
+// BUDGET-ARCHIV (erfüllte Sparziele / beglichene Schulden)
+// Erreichbar über den Einstellungen-Button im Budget-Header. Archivieren
+// selbst (archiveGoal/restoreGoal in budget-sparziele.js, archiveDebt/
+// restoreDebt in budget-debts.js) löscht nichts — nur dieses Modal zeigt
+// an, was aktuell archiviert ist, und bietet die Wiederherstellung an.
+// =========================
+
+const budgetArchivModal = wireModal('budget-archiv-modal-overlay', {
+  closeIds: ['budget-archiv-modal-close'],
+});
+
+function renderBudgetArchiv(){
+  const goalsList = document.getElementById('budget-archiv-goals-list');
+  const debtsList = document.getElementById('budget-archiv-debts-list');
+  if (!goalsList || !debtsList) return;
+
+  goalsList.innerHTML = '';
+  const archivedGoals = budgetGoals.filter(g => g.archived);
+  if (!archivedGoals.length) {
+    goalsList.innerHTML = '<p class="modal-hint">Noch keine archivierten Sparziele.</p>';
+  } else {
+    archivedGoals.forEach(goal => {
+      const row = document.createElement('div'); row.className = 'budget-archiv-row';
+      const emoji = PLANT_EMOJIS[goal.plantType] || '🌱';
+
+      const info = document.createElement('div'); info.className = 'budget-archiv-info';
+      const name = document.createElement('div'); name.className = 'archive-project-name';
+      name.textContent = `${emoji} ${goal.name}`;
+      const meta = document.createElement('div'); meta.className = 'archive-project-meta';
+      meta.textContent = `${fmtEuro(goal.current)} / ${fmtEuro(goal.target)}`;
+      info.append(name, meta);
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.className = 'btn-ghost'; restoreBtn.style.cssText = 'font-size:12px;flex-shrink:0;';
+      restoreBtn.textContent = '↩ Wiederherstellen';
+      restoreBtn.addEventListener('click', () => restoreGoal(goal.id));
+
+      row.append(info, restoreBtn);
+      goalsList.appendChild(row);
+    });
+  }
+
+  debtsList.innerHTML = '';
+  const archivedDebts = budgetDebts.filter(d => d.archived);
+  if (!archivedDebts.length) {
+    debtsList.innerHTML = '<p class="modal-hint">Noch keine archivierten Schulden.</p>';
+  } else {
+    archivedDebts.forEach(debt => {
+      const row = document.createElement('div'); row.className = 'budget-archiv-row';
+
+      const info = document.createElement('div'); info.className = 'budget-archiv-info';
+      const name = document.createElement('div'); name.className = 'archive-project-name';
+      name.textContent = `💳 ${debt.name}`;
+      const meta = document.createElement('div'); meta.className = 'archive-project-meta';
+      meta.textContent = `Vollständig beglichen · ${fmtEuro(debt.originalAmount)}`;
+      info.append(name, meta);
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.className = 'btn-ghost'; restoreBtn.style.cssText = 'font-size:12px;flex-shrink:0;';
+      restoreBtn.textContent = '↩ Wiederherstellen';
+      restoreBtn.addEventListener('click', () => restoreDebt(debt.id));
+
+      row.append(info, restoreBtn);
+      debtsList.appendChild(row);
+    });
+  }
+}
+
+document.getElementById('budget-settings-btn').addEventListener('click', () => {
+  renderBudgetArchiv();
+  budgetArchivModal.open();
 });
 
 // Wire secondary add-buttons — bind directly, no DOMContentLoaded proxy needed

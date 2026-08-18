@@ -2,6 +2,23 @@
 (function () {
 
   /* =========================================================
+     KONFIGURATION
+     Zentrale Stellschrauben, damit sie leicht angepasst werden können.
+     ========================================================= */
+
+  // Feste Logik-/Koordinatenraum-Größe für das gesamte Spiel (Spawns,
+  // Spielerposition, UI-Layout-Koordinaten wie Button-Y-Positionen, ...).
+  // UNABHÄNGIG von der tatsächlichen Canvas-Backing-Store-Auflösung —
+  // siehe fitCanvasToContainer() für die HiDPI-Skalierung.
+  const LOGICAL_W = 960;
+  const LOGICAL_H = 540;
+
+  // Ab diesem Score dürfen Hunter (die verfolgenden Gegner) erstmals
+  // spawnen — siehe spawnHazard(). Vorher soll sich der Spieler erst an
+  // Steuerung und normale Gegner gewöhnen können.
+  const HUNTER_UNLOCK_SCORE = 100;
+
+  /* =========================================================
      PLUGIN-ZUSTAND
      Diese Referenzen werden erst in mount() befüllt — vorher
      existiert weder Canvas noch Container.
@@ -9,6 +26,7 @@
   let canvas, ctx, hud, settingsBtnEl, permaPanelEl, runPanelEl;
   let rafId = null;
   let running = false;
+  let canvasResizeObserver = null;
 
   // Benannte Handler-Referenzen — nötig, damit destroy() exakt
   // diese Listener wieder entfernen kann (besonders wichtig für
@@ -47,9 +65,11 @@
   let keys, mouse;
   let showMainMenu, showGameOverMenu, showShop, showStats, pendingGameOver;
   let showHighscore, showSettings, confirmResetHighscores, confirmNewGame;
-  let UI;
-  let playerName;
   let menuButtons;
+  // Tastatur-Fokus für das aktuell offene Menü — siehe getActiveMenuButtons()
+  // und drawMenuButtons(). Wird bei jedem Menü-Wechsel auf einen sinnvollen
+  // Startindex zurückgesetzt.
+  let menuNav;
   let paused, gameOver, birdyVisible;
   let best;
   let highscores;
@@ -62,19 +82,11 @@
   let bonuses;
   let player;
   let hazards, coins, particles;
-
-  /* =========================================================
-    ZUKÜNFTIGER UI-STATE (Vorbereitung)
-    Noch nix ersetzt — nur vorbereitet
-  ========================================================= */
-
-  // Hilfsfunktion — lesen statt denken
-  function setUI(state){
-    UI.state = state;
-  }
+  // Ob gerade ein aktiver (nicht toter) Run existiert — steuert, ob
+  // "Spiel fortsetzen" anklickbar ist und ob destroy() den Run speichert.
+  let runActive;
 
   function isMenuOpen(){
-    if (UI.state !== null) return true;
     return (
       confirmResetHighscores ||
       confirmNewGame ||
@@ -88,44 +100,36 @@
     );
   }
 
-
-  function uiMenuActive(){
-    return UI.state !== null;
-  }
-
-
   function isClickableMenuOpen(){
     return (
       confirmResetHighscores ||
       confirmNewGame ||
       showMainMenu ||
+      showHighscore ||
       showSettings ||
       choosingBonus ||
       showShop ||
       showGameOverMenu
-      // PAUSE absichtlich NICHT dabei
+      // PAUSE und STATS absichtlich NICHT dabei (keine Buttons dort)
     );
   }
 
-  function uiClickable(){
-    return uiMenuActive();
-  }
-
   /* =========================================================
-     STATISTIKEN / PERMA — LocalStorage-Keys
+     STATISTIKEN / PERMA / AKTIVER RUN — LocalStorage-Keys
      Reine Konstanten, kein Per-Instanz-Zustand.
      ========================================================= */
 
   const statsKey     = "neon_dodge_stats";
   const highscoreKey = "neon_dodge_highscores";
   const permaKey     = "neon_dodge_perma";
+  const activeRunKey = "neon_dodge_active_run";
 
   // Stats speichern
   const saveStats = () =>
     localStorage.setItem(statsKey, JSON.stringify(stats));
 
-  function saveHighscore(name, score, coins){
-    highscores.push({ name, score, coins });
+  function saveHighscore(score, coins){
+    highscores.push({ score, coins });
 
     highscores.sort((a, b) => b.score - a.score);
     highscores = highscores.slice(0, 5);
@@ -149,20 +153,65 @@
   }
 
   /* =========================================================
+     AKTIVER RUN — Speichern/Laden/Löschen
+     Neon Dodge ist auf lange Runs ausgelegt: der komplette Spielzustand
+     (nicht nur Score/Coins) wird beim Schließen des Modals gesichert und
+     beim nächsten Öffnen wiederhergestellt — siehe initState() (Laden)
+     und destroy() (Speichern). Absichtlich NICHT gespeichert: particles
+     (rein kosmetische Kurzzeit-Effekte, wären beim nächsten Öffnen
+     ohnehin längst abgelaufen).
+     ========================================================= */
+
+  function saveActiveRun(){
+    const snapshot = {
+      t, score, runCoins,
+      player: {
+        x: player.x,
+        y: player.y,
+        speedBoostUntil: player.speedBoostUntil
+      },
+      bonuses: { ...bonuses },
+      nextMilestone,
+      choosingBonus,
+      hazards: hazards.map(h => ({ ...h })),
+      coins:   coins.map(c => ({ ...c }))
+    };
+    localStorage.setItem(activeRunKey, JSON.stringify(snapshot));
+  }
+
+  function loadActiveRun(){
+    const raw = localStorage.getItem(activeRunKey);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clearActiveRun(){
+    localStorage.removeItem(activeRunKey);
+  }
+
+  /* =========================================================
      INIT-STATE
      Befüllt den kompletten Spielzustand frisch aus localStorage.
-     Wird von mount() aufgerufen, NACHDEM canvas existiert (W/H
-     hängen von canvas.width/height ab).
+     Wird von mount() aufgerufen, NACHDEM canvas existiert.
      ========================================================= */
   function initState(){
-    W = canvas.width;
-    H = canvas.height;
+    // Fester Logik-Koordinatenraum — siehe KONFIGURATION oben. Bewusst
+    // NICHT von canvas.width/height abgeleitet, da diese jetzt die
+    // (HiDPI-skalierte) Backing-Store-Auflösung tragen, siehe
+    // fitCanvasToContainer().
+    W = LOGICAL_W;
+    H = LOGICAL_H;
 
     keys  = new Set();
     mouse = { x: -1, y: -1 };
+    menuNav = { index: 0 };
 
     // UI-Zustände
-    showMainMenu = false;
+    showMainMenu = true;
     showGameOverMenu = false;
     showShop         = false;
     showStats        = false;
@@ -172,19 +221,15 @@
     confirmResetHighscores = false;
     confirmNewGame   = false;
 
-    UI = { state: null };
-    setUI("main");
-
-    playerName = localStorage.getItem("neon_dodge_player") || "Player";
-
     menuButtons = [
       {
         label: "Neues Spiel",
-        y: 240,
+        y: 240, w: 280, h: 44,
         action: () => {
-          if (t > 0 || stats.coins > 0 || perma.speed > 0 || perma.hitbox > 0 || perma.boost > 0){
+          if (runActive){
             confirmNewGame = true;
             showMainMenu = false;
+            menuNav.index = 1; // Fokus auf "Abbrechen" — sichere Default-Wahl
           } else {
             startNewGame();
           }
@@ -192,15 +237,19 @@
       },
 
       {
-        label: `Spiel fortsetzen (${playerName})`,
-        y: 290,
-        action: () => resumeGame()
+        label: "Spiel fortsetzen",
+        y: 290, w: 280, h: 44,
+        disabled: () => !runActive,
+        action: () => { if (runActive) resumeGame(); }
       },
 
-      { label: "Highscore",        y: 340, action: () => {
+      {
+        label: "Highscore",
+        y: 340, w: 280, h: 44,
+        action: () => {
           showHighscore = true;
-          setUI(null);
-
+          showMainMenu = false;
+          menuNav.index = 0;
         }
       }
     ];
@@ -271,11 +320,53 @@
     hazards   = []; // rote Gegner
     coins     = []; // gelbe Coins
     particles = []; // Effekte
+
+    /* -------------------------
+      GESPEICHERTEN RUN LADEN
+      Falls beim letzten Schließen ein aktiver (nicht toter) Run
+      gespeichert wurde, wird er hier vollständig wiederhergestellt.
+      "Spiel fortsetzen" muss dadurch nur noch showMainMenu verlassen —
+      der Zustand liegt schon bereit, exakt wie beim Schließen.
+      ------------------------- */
+    runActive = false;
+
+    const savedRun = loadActiveRun();
+    if (savedRun) {
+      t        = savedRun.t ?? 0;
+      score    = savedRun.score ?? 0;
+      runCoins = savedRun.runCoins ?? 0;
+
+      if (savedRun.player) {
+        player.x = savedRun.player.x ?? player.x;
+        player.y = savedRun.player.y ?? player.y;
+        player.speedBoostUntil = savedRun.player.speedBoostUntil ?? 0;
+      }
+
+      if (savedRun.bonuses) {
+        bonuses.speedMult  = savedRun.bonuses.speedMult  ?? 1;
+        bonuses.hitboxMult = savedRun.bonuses.hitboxMult ?? 1;
+        bonuses.boostBonus = savedRun.bonuses.boostBonus ?? 0;
+      }
+
+      nextMilestone = savedRun.nextMilestone ?? 500;
+      choosingBonus = !!savedRun.choosingBonus;
+      hazards = Array.isArray(savedRun.hazards) ? savedRun.hazards : [];
+      coins   = Array.isArray(savedRun.coins)   ? savedRun.coins   : [];
+
+      // Falls mitten in einer Meilenstein-Bonus-Wahl gespeichert wurde,
+      // soll genau dieser Auswahlbildschirm beim Fortsetzen wieder
+      // erscheinen (siehe getActiveMenuButtons()).
+      paused = choosingBonus;
+
+      runActive = true;
+    }
   }
 
   /* =========================================================
      RESET-FUNKTION
-     Setzt einen kompletten Run zurück
+     Setzt einen kompletten Run zurück und markiert ihn als aktiv
+     (wird von startNewGame(), "Neustart" und der "R"-Taste genutzt —
+     alle drei bedeuten "ab jetzt läuft ein neuer, speicherbarer Run").
      ========================================================= */
   function reset() {
     birdyVisible = true;
@@ -317,6 +408,8 @@
     // Death-FX reset
     deathFX.t     = 0;
     deathFX.shake = 0;
+
+    runActive = true;
   }
 
   /* =========================================================
@@ -324,8 +417,9 @@
      ========================================================= */
   function spawnHazard() {
 
-    // Spawn-Seite bestimmen
-    const isHunter = Math.random() < 0.22; // 22% Chance Hunter
+    // Hunter erst ab HUNTER_UNLOCK_SCORE — vorher soll sich der Spieler
+    // erst an Steuerung und normale Gegner gewöhnen können.
+    const isHunter = score >= HUNTER_UNLOCK_SCORE && Math.random() < 0.22;
 
     const side = Math.random() < 0.5 ? "right" : "top";
 
@@ -396,6 +490,137 @@
   }
 
   /* =========================================================
+     MEILENSTEIN-BONUS WÄHLEN
+     Gemeinsame Logik für Maus, Zahlen-Taste und Pfeil+Enter (siehe
+     getActiveMenuButtons()).
+     ========================================================= */
+  function chooseBonus(i){
+    const effects = [
+      () => { bonuses.speedMult  += 0.05; },
+      () => { bonuses.hitboxMult *= 0.92; },
+      () => { bonuses.boostBonus += 0.5;  }
+    ];
+    if (effects[i]) effects[i]();
+
+    choosingBonus = false;
+    countdownActive = true;
+    countdownTime = 2; // Sekunden
+    paused = true;
+    nextMilestone += 500;
+  }
+
+  /* =========================================================
+     GENERISCHES MENÜ-SYSTEM
+     Eine einzige Quelle für Buttons je offenem Menü — wird von Render
+     (drawMenuButtons), Maus-Klick (handleCanvasClick) UND Tastatur
+     (onKeyDown) gleichermaßen genutzt. Neue Menüs müssen hier nur einen
+     weiteren Fall ergänzen und sind dadurch automatisch komplett per
+     Maus UND Tastatur bedienbar.
+     ========================================================= */
+  function getActiveMenuButtons(){
+    if (confirmNewGame) return [
+      {
+        label: "Ja, neues Spiel", y: 260, w: 320, h: 48,
+        action: () => { confirmNewGame = false; startNewGame(); }
+      },
+      {
+        label: "Abbrechen", y: 330, w: 320, h: 48,
+        action: () => { confirmNewGame = false; showMainMenu = true; menuNav.index = 0; }
+      }
+    ];
+
+    if (confirmResetHighscores) return [
+      {
+        label: "Ja, zurücksetzen", y: 260, w: 320, h: 48,
+        action: () => {
+          highscores = [];
+          localStorage.removeItem(highscoreKey);
+          best = 0;
+          localStorage.setItem("neon_dodge_best", "0");
+
+          confirmResetHighscores = false;
+          showSettings = false;
+          showMainMenu = true;
+          paused = true;
+          menuNav.index = 0;
+        }
+      },
+      {
+        label: "Abbrechen", y: 330, w: 320, h: 48,
+        action: () => { confirmResetHighscores = false; }
+      }
+    ];
+
+    if (showMainMenu) return menuButtons;
+
+    if (showHighscore) return [
+      {
+        label: "Zurück", y: 360, w: 320, h: 48,
+        action: () => { showHighscore = false; showMainMenu = true; menuNav.index = 0; }
+      }
+    ];
+
+    if (showSettings) return [
+      {
+        label: "Highscores zurücksetzen", y: 230, w: 320, h: 48,
+        action: () => { confirmResetHighscores = true; menuNav.index = 1; }
+      },
+      {
+        label: "Zurück", y: 310, w: 320, h: 48,
+        action: () => { showSettings = false; paused = false; }
+      }
+    ];
+
+    if (choosingBonus) return [
+      { label: "Speed +5 %",      y: 230, w: 320, h: 48, action: () => chooseBonus(0) },
+      { label: "Kleinere Hitbox", y: 290, w: 320, h: 48, action: () => chooseBonus(1) },
+      { label: "Längerer Boost",  y: 350, w: 320, h: 48, action: () => chooseBonus(2) }
+    ];
+
+    if (showShop) return [
+      ...shopOptions.map((o, i) => ({
+        label: `${o.label} (${o.cost})`,
+        y: 220 + i * 80, w: 360, h: 52,
+        dimmed: () => stats.coins < o.cost,
+        action: () => {
+          if (stats.coins < o.cost){
+            shopShake.index = i;
+            shopShake.t = shopShake.dur;
+            return;
+          }
+          stats.coins -= o.cost;
+          o.buy();
+          saveStats();
+          savePerma();
+          generateShop();
+          menuNav.index = 0;
+        }
+      })),
+      {
+        label: "Zurück", y: 460, w: 320, h: 48,
+        action: () => { showShop = false; showGameOverMenu = true; menuNav.index = 0; }
+      }
+    ];
+
+    if (showGameOverMenu) return [
+      {
+        label: "Neustart", y: 240, w: 320, h: 48,
+        action: () => { showGameOverMenu = false; reset(); }
+      },
+      {
+        label: "Upgrade-Shop", y: 310, w: 320, h: 48,
+        action: () => { showGameOverMenu = false; showShop = true; generateShop(); menuNav.index = 0; }
+      },
+      {
+        label: "Hauptmenü", y: 380, w: 320, h: 48,
+        action: () => { showGameOverMenu = false; showMainMenu = true; paused = true; menuNav.index = 0; }
+      }
+    ];
+
+    return [];
+  }
+
+  /* =========================================================
      INPUT: KEYDOWN
      Benannte Funktion statt Inline-Listener, damit destroy()
      genau diesen Handler wieder von window entfernen kann.
@@ -406,15 +631,24 @@
   onKeyDown = (e) => {
     const key = e.key.toLowerCase();
 
+    // ESC — Menüs schließen/zurück, wo sinnvoll (mandatorische Auswahl-
+    // bzw. Terminal-Screens wie Meilenstein-Bonus oder Game-Over haben
+    // bewusst KEIN Esc-Escape).
     if (e.key === "Escape" && confirmResetHighscores){
       confirmResetHighscores = false;
       return;
     }
-    // ESC → Menü schließen
     if (e.key === "Escape"){
+      if (confirmNewGame){
+        confirmNewGame = false;
+        showMainMenu = true;
+        menuNav.index = 0;
+        return;
+      }
       if (showHighscore){
         showHighscore = false;
         showMainMenu = true;
+        menuNav.index = 0;
         return;
       }
 
@@ -433,20 +667,9 @@
       if (showShop){
         showShop = false;
         showGameOverMenu = true;
+        menuNav.index = 0;
         return;
       }
-    }
-
-
-
-    if (showSettings && key === "1") {
-      highscores = [];
-      localStorage.removeItem(highscoreKey);
-      best = 0;
-      localStorage.setItem("neon_dodge_best", "0");
-      showSettings = false;
-      paused = false;
-      return;
     }
 
     // Scroll / Default verhindern
@@ -454,108 +677,53 @@
       e.preventDefault();
     }
 
-
     /* -------------------------
-      MAIN MENU
-      ------------------------- */
-    if (UI.state === "main") {
+       GENERISCHE MENÜ-NAVIGATION
+       Gilt für JEDES offene Menü (Hauptmenü, Meilenstein-Boni, Shop,
+       Game-Over, Bestätigungsdialoge, Highscore, Einstellungen, ...) —
+       siehe getActiveMenuButtons(). W/S bzw. Pfeile bewegen den Fokus,
+       Enter/Space bestätigt, Zahlen wählen direkt aus (und bestätigen
+       sofort). Jede Menüaktion ist dadurch komplett ohne Maus erreichbar.
+       ------------------------- */
+    if (isMenuOpen()){
+      const menuBtns = getActiveMenuButtons();
 
-      if (key === "1") {
-        playerName =
-          prompt("Name eingeben (max. 20 Zeichen):", "") || "Player";
-        playerName = playerName.slice(0, 20);
+      if (menuBtns.length){
+        const isDisabled = (i) =>
+          typeof menuBtns[i].disabled === "function" && menuBtns[i].disabled();
 
-        stats.coins = 0;     // ← Coins reset
-        saveStats();         // ← persistieren
-        resetPerma();
-        reset();
-        showMainMenu = false;
+        if (["w","arrowup","s","arrowdown"].includes(key)){
+          const dir = (key === "w" || key === "arrowup") ? -1 : 1;
+          let next = menuNav.index;
+          for (let i = 0; i < menuBtns.length; i++){
+            next = (next + dir + menuBtns.length) % menuBtns.length;
+            if (!isDisabled(next)) break;
+          }
+          menuNav.index = next;
+          return;
+        }
+
+        if (key === "enter" || key === " "){
+          menuNav.index = clamp(menuNav.index, 0, menuBtns.length - 1);
+          if (!isDisabled(menuNav.index)) menuBtns[menuNav.index].action();
+          return;
+        }
+
+        const num = Number(key);
+        if (Number.isInteger(num) && num >= 1 && num <= menuBtns.length){
+          const i = num - 1;
+          if (!isDisabled(i)){
+            menuNav.index = i;
+            menuBtns[i].action();
+          }
+          return;
+        }
       }
 
-      if (key === "2") {
-        showMainMenu = false;
-      }
-      if (key === "3") {
-        showHighscore = true;
-        showMainMenu = false;
-      }
-      return;
+      return; // Menü offen → keine normale Spielsteuerung (WASD-Bewegung etc.)
     }
 
     keys.add(key);
-
-    /* -------------------------
-       GAME OVER MENÜ
-       ------------------------- */
-    if (showGameOverMenu) {
-
-      if (key === "1") {
-        showGameOverMenu = false;
-        reset();
-      }
-
-      if (key === "2") {
-        showGameOverMenu = false;
-        showShop = true;
-        generateShop();
-      }
-
-      if (key === "3") {
-        showGameOverMenu = false;
-        showMainMenu = true;
-        paused = true;
-      }
-
-      return;
-    }
-
-
-    /* -------------------------
-       SHOP
-       ------------------------- */
-    if (showShop) {
-
-      if (["1","2","3"].includes(e.key)) {
-        const opt = shopOptions[Number(e.key) - 1];
-
-        if (opt && stats.coins >= opt.cost) {
-        stats.coins -= opt.cost;
-        opt.buy();
-        saveStats();
-        savePerma();
-        generateShop();
-
-      } else {
-        shopShake.index = Number(e.key) - 1;
-        shopShake.t = shopShake.dur;
-      }
-
-
-      }
-
-      return;
-    }
-
-    /* -------------------------
-       MEILENSTEIN-BONI
-       ------------------------- */
-    if (choosingBonus) {
-
-      if (key === "1") bonuses.speedMult  += 0.05;
-      if (key === "2") bonuses.hitboxMult *= 0.92;
-      if (key === "3") bonuses.boostBonus += 0.5;
-
-      if (["1","2","3"].includes(key)) {
-        choosingBonus = false;
-        countdownActive = true;
-        countdownTime = 2; // Sekunden
-        paused = true;
-        nextMilestone += 500;
-
-      }
-
-      return;
-    }
 
     /* -------------------------
        NORMALE STEUERUNG
@@ -574,6 +742,7 @@
       showStats = false;
       showShop = false;
       showGameOverMenu = false;
+      menuNav.index = 0;
       return;
     }
 
@@ -639,7 +808,7 @@
 
     rafId = requestAnimationFrame(loop);
 
-    
+
   }
 
     /* =========================================================
@@ -665,6 +834,7 @@
           if (pendingGameOver){
             pendingGameOver = false;
             showGameOverMenu = true;
+            menuNav.index = 0;
           }
         }
 
@@ -805,8 +975,12 @@
             puff(player.x, player.y, 70, 260, 0.7, "boom");
 
             best = Math.max(best, Math.floor(score));
-            saveHighscore(playerName, Math.floor(score), runCoins);
+            saveHighscore(Math.floor(score), runCoins);
             localStorage.setItem("neon_dodge_best", String(best));
+
+            // Der Run ist vorbei — nichts mehr zum Fortsetzen.
+            clearActiveRun();
+            runActive = false;
 
             break;
           }
@@ -838,6 +1012,7 @@
       if (!choosingBonus && score >= nextMilestone) {
         choosingBonus = true;
         paused = true;
+        menuNav.index = 0;
       }
     }
 
@@ -904,6 +1079,45 @@
   ctx.restore();
 }
 
+  /* =========================================================
+     GENERISCHES ZEICHNEN/HIT-TESTING FÜR MENÜ-BUTTONS
+     Eine Instanz für alle Menüs (siehe getActiveMenuButtons()) — Maus-
+     Hover UND Tastatur-Fokus (menuNav.index) bekommen dieselbe optische
+     Hervorhebung, damit sich beide Eingabewege konsistent anfühlen.
+     ========================================================= */
+  function drawMenuButtons(buttons, focusIndex){
+    buttons.forEach((btn, i) => {
+      const w = btn.w || 320;
+      const h = btn.h || 48;
+      const isDisabled = typeof btn.disabled === "function" && btn.disabled();
+      const isDimmed   = isDisabled || (typeof btn.dimmed === "function" && btn.dimmed());
+
+      const hoveredByMouse =
+        !isDisabled &&
+        mouse.x > W/2 - w/2 && mouse.x < W/2 + w/2 &&
+        mouse.y > btn.y - h/2 && mouse.y < btn.y + h/2;
+
+      const focused = !isDisabled && i === focusIndex;
+
+      ctx.globalAlpha = isDimmed ? 0.4 : 1;
+      drawButton(btn.label, W/2, btn.y, w, h, hoveredByMouse || focused);
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function hitTestMenuButtons(buttons, x, y){
+    for (let i = 0; i < buttons.length; i++){
+      const btn = buttons[i];
+      const w = btn.w || 320;
+      const h = btn.h || 48;
+      if (
+        x > W/2 - w/2 && x < W/2 + w/2 &&
+        y > btn.y - h/2 && y < btn.y + h/2
+      ) return i;
+    }
+    return -1;
+  }
+
 
 
   /* =========================================================
@@ -916,14 +1130,12 @@
 
     if (isMenuOpen()){
       if (confirmNewGame) return renderConfirmNewGame();
-      if (confirmResetHighscores){
-        return renderConfirmResetMenu();
-      }
+      if (confirmResetHighscores) return renderConfirmResetMenu();
 
-      if (UI.state === "main") return renderMainMenu();
+      if (showMainMenu)     return renderMainMenu();
 
       if (showHighscore)   return renderHighscore();
-      if (showSettings)    return renderSettingsMenu();
+      if (showSettings)    return renderSettings();
       if (choosingBonus)   return renderBonusMenu();
       if (showShop)        return renderShop();
       if (showGameOverMenu)return renderGameOverMenu();
@@ -1070,7 +1282,7 @@
        HUD (Text oben)
        ------------------------- */
       hud.textContent =
-        `${playerName} · Score: ${Math.floor(score)} · Best: ${best} · Coins: ${stats.coins}`;
+        `Score: ${Math.floor(score)} · Best: ${best} · Coins: ${stats.coins}`;
 
 
     /* -------------------------
@@ -1083,7 +1295,7 @@
     }
 
     ctx.restore();
-    
+
     if (countdownActive){
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -1110,19 +1322,6 @@
         "Space — Weiter · M — Hauptmenü"
       );
     }
-
-
-    if (showMainMenu)         renderMainMenu();
-    else if (showHighscore)  renderHighscore();
-    else if (showSettings)   renderSettings();
-    else {
-
-      if (showStats)        renderStats();
-      if (showGameOverMenu) renderGameOverMenu();
-      if (choosingBonus)    renderBonusChoice();
-      if (showShop)         renderShop();
-    }
-
   }
 
   /* =========================================================
@@ -1145,13 +1344,6 @@
     ctx.restore();
   }
 
-  /* =========================================================
-     START
-     Der eigentliche Start (initState + reset + Loop) passiert
-     jetzt in mount() — nicht mehr automatisch beim Laden des
-     Skripts, da das Skript nur einmal geladen, mount() aber bei
-     jedem Öffnen erneut aufgerufen wird.
-     ========================================================= */
   /* =========================================================
      STATISTIK-OVERLAY
      ========================================================= */
@@ -1189,21 +1381,7 @@
     ctx.font = "700 36px system-ui";
     ctx.fillText("MEILENSTEIN", W/2, 140);
 
-    const buttons = [
-      { label: "Speed +5 %",      y: 230, action: () => bonuses.speedMult += 0.05 },
-      { label: "Kleinere Hitbox", y: 290, action: () => bonuses.hitboxMult *= 0.92 },
-      { label: "Längerer Boost",  y: 350, action: () => bonuses.boostBonus += 0.5 }
-    ];
-
-    buttons.forEach(btn => {
-      const hovered =
-        mouse.x > W/2 - 160 &&
-        mouse.x < W/2 + 160 &&
-        mouse.y > btn.y - 24 &&
-        mouse.y < btn.y + 24;
-
-      drawButton(btn.label, W/2, btn.y, 320, 48, hovered);
-    });
+    drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
     ctx.restore();
   }
@@ -1251,38 +1429,7 @@
     ctx.font = "500 18px system-ui";
     ctx.fillText(`Coins: ${stats.coins}`, W/2, 150);
 
-    shopOptions.forEach((o, i) => {
-      const y = 220 + i * 80;
-
-      const hovered =
-        mouse.x > W/2 - 180 &&
-        mouse.x < W/2 + 180 &&
-        mouse.y > y - 26 &&
-        mouse.y < y + 26;
-
-      const affordable = stats.coins >= o.cost;
-
-      ctx.globalAlpha = affordable ? 1 : 0.35;
-
-      drawButton(
-        `${o.label} (${o.cost})`,
-        W/2,
-        y,
-        360,
-        52,
-        hovered && affordable
-      );
-
-      ctx.globalAlpha = 1;
-    });
-
-    const backHover =
-      mouse.x > W/2 - 160 &&
-      mouse.x < W/2 + 160 &&
-      mouse.y > 400 - 24 &&
-      mouse.y < 400 + 24;
-
-    drawButton("Zurück", W/2, 460, 320, 48, backHover);
+    drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
     ctx.restore();
   }
@@ -1335,21 +1482,7 @@
     ctx.font = "700 42px system-ui";
     ctx.fillText("GAME OVER", W/2, 140);
 
-    const buttons = [
-      { text: "Neustart",        y: 240, action: () => { showGameOverMenu = false; reset(); } },
-      { text: "Upgrade-Shop",    y: 310, action: () => { showGameOverMenu = false; showShop = true; generateShop(); } },
-      { text: "Hauptmenü",       y: 380, action: () => { showGameOverMenu = false; showMainMenu = true; paused = true; } }
-    ];
-
-    buttons.forEach(b => {
-      const hovered =
-        mouse.x > W/2 - 160 &&
-        mouse.x < W/2 + 160 &&
-        mouse.y > b.y - 24 &&
-        mouse.y < b.y + 24;
-
-      drawButton(b.text, W/2, b.y, 320, 48, hovered);
-    });
+    drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
     ctx.restore();
   }
@@ -1366,19 +1499,7 @@
     ctx.font = "700 46px system-ui";
     ctx.fillText("NEON DODGE", W/2, 150);
 
-    menuButtons.forEach(btn => {
-      const hovered =
-        mouse.x > W/2 - 140 &&
-        mouse.x < W/2 + 140 &&
-        mouse.y > btn.y - 22 &&
-        mouse.y < btn.y + 22;
-
-      drawButton(btn.label, W/2, btn.y, 280, 44, hovered);
-    });
-
-    ctx.font = "500 14px system-ui";
-    ctx.globalAlpha = 0.7;
-    ctx.fillText("Steuerung: 1 / 2 / 3 oder Maus", W/2, 400);
+    drawMenuButtons(menuButtons, menuNav.index);
 
     ctx.restore();
   }
@@ -1402,25 +1523,15 @@
 
     highscores.forEach((h, i) => {
       ctx.fillText(
-        `${i+1}. ${h.name} — ${h.score} Punkte · ${h.coins} Coins`,
+        `${i+1}. ${h.score} Punkte · ${h.coins} Coins`,
         W/2,
         200 + i * 32
       );
     });
 
     ctx.globalAlpha = 0.8;
-
-    const hoveredBack =
-      mouse.x > W/2 - 160 &&
-      mouse.x < W/2 + 160 &&
-      mouse.y > 360 - 24 &&
-      mouse.y < 360 + 24;
-
-    drawButton(
-      "Zurück",
-      W/2, 360, 320, 48,
-      hoveredBack
-    );
+    drawMenuButtons(getActiveMenuButtons(), menuNav.index);
+    ctx.globalAlpha = 1;
 
     ctx.restore();
   }
@@ -1436,29 +1547,7 @@ function renderSettings(){
   ctx.font = "700 36px system-ui";
   ctx.fillText("EINSTELLUNGEN", W/2, 140);
 
-  const hoveredReset =
-    mouse.x > W/2 - 160 &&
-    mouse.x < W/2 + 160 &&
-    mouse.y > 230 - 24 &&
-    mouse.y < 230 + 24;
-
-  drawButton(
-    "Highscores zurücksetzen",
-    W/2, 230, 320, 48,
-    hoveredReset
-  );
-
-  const hoveredBack =
-    mouse.x > W/2 - 160 &&
-    mouse.x < W/2 + 160 &&
-    mouse.y > 310 - 24 &&
-    mouse.y < 310 + 24;
-
-  drawButton(
-    "Zurück",
-    W/2, 310, 320, 48,
-    hoveredBack
-  );
+  drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
   ctx.restore();
 }
@@ -1472,306 +1561,72 @@ function renderConfirmNewGame(){
   ctx.textAlign = "center";
   ctx.fillStyle = "#e6e6e6";
   ctx.font = "700 32px system-ui";
-  ctx.fillText("Neues Spiel starten?", W/2, 150);
+  ctx.fillText("Neues Spiel starten?", W/2, 140);
 
   ctx.font = "500 16px system-ui";
   ctx.globalAlpha = 0.8;
-  ctx.fillText("Dein aktueller Fortschritt geht verloren.", W/2, 190);
+  ctx.fillText("Es gibt bereits einen laufenden Spielstand.", W/2, 182);
+  ctx.fillText("Er wird beim Start eines neuen Spiels gelöscht.", W/2, 206);
   ctx.globalAlpha = 1;
 
-  const yesHover =
-    mouse.x > W/2 - 160 &&
-    mouse.x < W/2 + 160 &&
-    mouse.y > 260 - 24 &&
-    mouse.y < 260 + 24;
+  drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
-  drawButton("Ja, neues Spiel", W/2, 260, 320, 48, yesHover);
+  ctx.restore();
+}
 
-  const noHover =
-    mouse.x > W/2 - 160 &&
-    mouse.x < W/2 + 160 &&
-    mouse.y > 330 - 24 &&
-    mouse.y < 330 + 24;
+function renderConfirmResetMenu(){
+  ctx.save();
 
-  drawButton("Abbrechen", W/2, 330, 320, 48, noHover);
+  ctx.fillStyle = "#0b0d12";
+  ctx.fillRect(0,0,W,H);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#e6e6e6";
+  ctx.font = "700 32px system-ui";
+  ctx.fillText("Highscores zurücksetzen?", W/2, 150);
+
+  ctx.font = "500 16px system-ui";
+  ctx.globalAlpha = 0.8;
+  ctx.fillText("Diese Aktion kann nicht rückgängig gemacht werden.", W/2, 190);
+  ctx.globalAlpha = 1;
+
+  drawMenuButtons(getActiveMenuButtons(), menuNav.index);
 
   ctx.restore();
 }
 
 
-
-
+/* =========================================================
+   MAUS-KLICK
+   Ein einziger, generischer Handler für alle Menüs — nutzt dieselbe
+   Button-Liste (getActiveMenuButtons()) wie Rendering und Tastatur.
+   ========================================================= */
 function handleCanvasClick(x, y){
-  if (showHighscore){
-    // Zurück
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 360 - 24 &&
-      y < 360 + 24
-    ){
-      showHighscore = false;
-      showMainMenu = true;
-      return;
-    }
-  }
+  if (!isMenuOpen()) return;
 
-  if (confirmResetHighscores){
-    // JA
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 260 - 24 &&
-      y < 260 + 24
-    ){
-      highscores = [];
-      localStorage.removeItem(highscoreKey);
-      best = 0;
-      localStorage.setItem("neon_dodge_best", "0");
+  const btns = getActiveMenuButtons();
+  const i = hitTestMenuButtons(btns, x, y);
+  if (i === -1) return;
 
-      confirmResetHighscores = false;
-      showSettings = false;
-      showMainMenu = true;
-      paused = true;
+  const btn = btns[i];
+  const isDisabled = typeof btn.disabled === "function" && btn.disabled();
+  if (isDisabled) return;
 
-      return;
-      
-    }
-
-    // NEIN
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 330 - 24 &&
-      y < 330 + 24
-    ){
-      confirmResetHighscores = false;
-      return;
-    }
-  }
-
-  if (confirmNewGame){
-
-    // JA
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 260 - 24 &&
-      y < 260 + 24
-    ){
-      confirmNewGame = false;
-      startNewGame();
-      return;
-    }
-
-    // NEIN
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 330 - 24 &&
-      y < 330 + 24
-    ){
-      confirmNewGame = false;
-      showMainMenu = true;
-      return;
-    }
-  }
-
-  if (UI.state === "main"){
-
-    for (const btn of menuButtons){
-      if (
-        x > W/2 - 140 &&
-        x < W/2 + 140 &&
-        y > btn.y - 22 &&
-        y < btn.y + 22
-      ){
-        btn.action();
-        return;
-      }
-    }
-  }
-
-
-  // Main Menu
-  if (showMainMenu){
-    if (y > 220 && y < 260) { // Neues Spiel
-      // Gleiche Sicherheitsabfrage wie im Hauptmenü-Button (menuButtons[0].action)
-      // — verhindert, dass laufender Fortschritt (Zeit/Coins/Perma-Boni) hier
-      // stillschweigend verloren geht, während der Hauptmenü-Pfad nachfragt.
-      if (t > 0 || stats.coins > 0 || perma.speed > 0 || perma.hitbox > 0 || perma.boost > 0){
-        confirmNewGame = true;
-        showMainMenu = false;
-      } else {
-        showMainMenu = false;
-        reset();
-      }
-    }
-    if (y > 260 && y < 300) { // Fortsetzen
-      showMainMenu = false;
-    }
-    if (y > 300 && y < 340) { // Highscore
-      showHighscore = true;
-      showMainMenu = false;
-    }
-  }
-
-  if (choosingBonus){
-    const options = [
-      () => bonuses.speedMult += 0.05,
-      () => bonuses.hitboxMult *= 0.92,
-      () => bonuses.boostBonus += 0.5
-    ];
-
-    for (let i = 0; i < options.length; i++){
-      const by = 230 + i * 60;
-      if (
-        x > W/2 - 160 &&
-        x < W/2 + 160 &&
-        y > by - 24 &&
-        y < by + 24
-      ){
-        options[i]();
-        choosingBonus = false;
-        paused = false;
-        nextMilestone += 500;
-        return;
-      }
-    }
-  }
-
- if (showSettings){
-    // Reset Highscores → Nachfrage
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 230 - 24 &&
-      y < 230 + 24
-    ){
-      confirmResetHighscores = true;
-      return;
-    }
-
-
-    // Zurück
-    if (
-      x > W/2 - 160 &&
-      x < W/2 + 160 &&
-      y > 310 - 24 &&
-      y < 310 + 24
-    ){
-      showSettings = false;
-      paused = false;
-      return;
-    }
-  }
-  if (showGameOverMenu){
-    const buttons = [
-      { y: 240, action: () => { showGameOverMenu = false; reset(); } },
-      { y: 310, action: () => { showGameOverMenu = false; showShop = true; generateShop(); } },
-      { y: 380, action: () => { showGameOverMenu = false; showMainMenu = true; paused = true; } }
-    ];
-
-    for (const b of buttons){
-      if (
-        x > W/2 - 160 &&
-        x < W/2 + 160 &&
-        y > b.y - 24 &&
-        y < b.y + 24
-      ){
-        b.action();
-        return;
-      }
-    }
-
-    return;
-  }
-
-  if (showShop){
-  shopOptions.forEach((o, i) => {
-    const y = 220 + i * 70;
-    if (
-      x > W/2 - 180 &&
-      x < W/2 + 180 &&
-      y > y - 26 &&
-      y < y + 26
-    ){
-      if (stats.coins >= o.cost){
-        stats.coins -= o.cost;
-        o.buy();
-        saveStats();
-        savePerma();
-        generateShop();
-      }
-    }
-  });
-
-  // Zurück
-  if (
-    x > W/2 - 160 &&
-    x < W/2 + 160 &&
-    y > 400 - 24 &&
-    y < 400 + 24
-  ){
-    showShop = false;
-    showGameOverMenu = true;
-  }
-
-  return;
-}
-}
-
-
-
-function isClickableAt(x, y){
-
-  // MAIN MENU
-  if (showMainMenu){
-    if (y > 220 && y < 260) return true; // Neues Spiel
-    if (y > 260 && y < 300) return true; // Fortsetzen
-    if (y > 300 && y < 340) return true; // Highscore
-  }
-
-  // GAME OVER MENU
-  if (showGameOverMenu){
-    const buttons = [
-      { y: 240, action: () => { showGameOverMenu = false; reset(); } },
-      { y: 310, action: () => { showGameOverMenu = false; showShop = true; generateShop(); } },
-      { y: 380, action: () => { showGameOverMenu = false; showMainMenu = true; paused = true; } }
-    ];
-
-    for (const b of buttons){
-      if (
-        x > W/2 - 160 &&
-        x < W/2 + 160 &&
-        y > b.y - 24 &&
-        y < b.y + 24
-      ){
-        b.action();
-        return;
-      }
-    }
-  }
-
-
-  return false;
+  menuNav.index = i;
+  btn.action();
 }
 
 function startNewGame(){
-  playerName =
-    prompt("Name eingeben (max. 20 Zeichen):", "") || "Player";
-  playerName = playerName.slice(0, 20);
-  localStorage.setItem("neon_dodge_player", playerName);
-
-
   stats.coins = 0;
   saveStats();
   resetPerma();
+  clearActiveRun();
   reset();
   showMainMenu = false;
 }
 
 function resumeGame(){
+  if (!runActive) return;
   showMainMenu = false;
 }
 
@@ -1784,22 +1639,33 @@ function resumeGame(){
 function mount(container){
   container.innerHTML = `
     <div class="neon-dodge-root">
-      <div class="nd-top">
-        <div id="neon-dodge-hud" class="nd-hud">Score: 0 · Best: 0</div>
-        <button id="neon-dodge-settings-btn" class="nd-settings-btn" title="Einstellungen" aria-label="Einstellungen">⚙️</button>
-      </div>
-      <canvas id="neon-dodge-canvas" class="nd-canvas" width="960" height="540"></canvas>
-      <div class="nd-panels">
-        <div class="nd-panel" id="neon-dodge-perma-panel"></div>
-        <div class="nd-panel" id="neon-dodge-run-panel"></div>
-      </div>
-      <div class="nd-hint">
-        <div>
-          Steuerung:
-          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> /
-          Pfeile · Pause: <kbd>Leertaste</kbd> · Neustart: <kbd>R</kbd> · Statistik <kbd>T</kbd>
+      <div class="nd-stage">
+        <div class="nd-top">
+          <div id="neon-dodge-hud" class="nd-hud">Score: 0 · Best: 0</div>
+          <button id="neon-dodge-settings-btn" class="nd-settings-btn" title="Einstellungen" aria-label="Einstellungen">⚙️</button>
         </div>
-        <div>Ziel: Sammle die gelben Coins ein, weiche allem anderen aus.</div>
+        <div class="nd-layout">
+          <div class="nd-side nd-side-left">
+            <div class="nd-panel" id="neon-dodge-perma-panel"></div>
+            <div class="nd-hint">
+              <div>
+                Steuerung:
+                <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> /
+                Pfeile · Pause: <kbd>Leertaste</kbd> · Neustart: <kbd>R</kbd> · Statistik <kbd>T</kbd>
+              </div>
+              <div>
+                Menüs: <kbd>↑</kbd><kbd>↓</kbd> wählen · <kbd>Enter</kbd> bestätigen · <kbd>Esc</kbd> zurück
+              </div>
+              <div>Ziel: Sammle die gelben Coins ein, weiche allem anderen aus.</div>
+            </div>
+          </div>
+          <div class="nd-canvas-wrap">
+            <canvas id="neon-dodge-canvas" class="nd-canvas" width="960" height="540"></canvas>
+          </div>
+          <div class="nd-side nd-side-right">
+            <div class="nd-panel" id="neon-dodge-run-panel"></div>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -1812,35 +1678,53 @@ function mount(container){
   runPanelEl    = container.querySelector('#neon-dodge-run-panel');
 
   // Frischen Zustand aus localStorage aufbauen (siehe initState()-Kommentar
-  // weiter oben — wichtig u.a. nach einem Reset über die Einstellungen).
+  // weiter oben — inkl. eines evtl. gespeicherten aktiven Runs).
   initState();
+
+  // Canvas füllt den verfügbaren Platz zwischen den Seitenbereichen maximal
+  // aus, ohne sein 16:9-Seitenverhältnis zu verlieren. Setzt zusätzlich die
+  // Backing-Store-Auflösung auf CSS-Größe × devicePixelRatio, damit Text
+  // gestochen scharf bleibt (siehe fitCanvasToContainer()). Läuft bei jeder
+  // Größenänderung des Wraps neu (Fenster-Resize, Modal-Öffnen).
+  fitCanvasToContainer();
+  canvasResizeObserver = new ResizeObserver(() => fitCanvasToContainer());
+  canvasResizeObserver.observe(canvas.parentElement);
 
   onCanvasMouseMove = (e) => {
     const r = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - r.left;
-    mouse.y = e.clientY - r.top;
+    // Canvas wird per CSS auf Modal-Größe skaliert, die interne Zeichnung
+    // nutzt aber immer den festen Logik-Koordinatenraum LOGICAL_W/H (siehe
+    // KONFIGURATION) — daher hier auf diesen zurückrechnen, unabhängig von
+    // der tatsächlichen Backing-Store-Auflösung (die für HiDPI-Schärfe
+    // separat skaliert wird, siehe fitCanvasToContainer()).
+    mouse.x = (e.clientX - r.left) * (LOGICAL_W / r.width);
+    mouse.y = (e.clientY - r.top)  * (LOGICAL_H / r.height);
 
     if (!isClickableMenuOpen()){
       canvas.style.cursor = "default";
       return;
     }
 
-    canvas.style.cursor =
-      showMainMenu &&
-      menuButtons.some(btn =>
-        mouse.x > W/2 - 140 &&
-        mouse.x < W/2 + 140 &&
-        mouse.y > btn.y - 22 &&
-        mouse.y < btn.y + 22
-      )
-      ? "pointer"
-      : "default";
+    const btns = getActiveMenuButtons();
+    const hoverIndex = hitTestMenuButtons(btns, mouse.x, mouse.y);
+    const hoveredDisabled =
+      hoverIndex !== -1 &&
+      typeof btns[hoverIndex].disabled === "function" &&
+      btns[hoverIndex].disabled();
+
+    canvas.style.cursor = (hoverIndex !== -1 && !hoveredDisabled) ? "pointer" : "default";
+
+    // Maus-Hover synchronisiert den Tastatur-Fokus, damit sich Maus- und
+    // Tastatursteuerung konsistent anfühlen (siehe drawMenuButtons()).
+    if (hoverIndex !== -1 && !hoveredDisabled) {
+      menuNav.index = hoverIndex;
+    }
   };
 
   onCanvasClick = (e) => {
     const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
+    const x = (e.clientX - r.left) * (LOGICAL_W / r.width);
+    const y = (e.clientY - r.top)  * (LOGICAL_H / r.height);
 
     handleCanvasClick(x, y);
   };
@@ -1849,6 +1733,7 @@ function mount(container){
     showSettings = true;
     showMainMenu = false;
     paused = true;
+    menuNav.index = 0;
   };
 
   canvas.addEventListener("mousemove", onCanvasMouseMove);
@@ -1863,11 +1748,17 @@ function mount(container){
 
   running = true;
   last = performance.now();
-  reset();
   rafId = requestAnimationFrame(loop);
 }
 
 function destroy(){
+  // Aktiven (nicht toten) Run sichern, BEVOR irgendwas abgebaut wird —
+  // Neon Dodge ist auf lange Runs ausgelegt, der Fortschritt darf beim
+  // Schließen nicht verloren gehen (siehe initState() fürs Laden).
+  if (runActive) {
+    saveActiveRun();
+  }
+
   // running=false lässt loop() beim nächsten Aufruf sofort zurückkehren,
   // OHNE ein weiteres requestAnimationFrame zu planen (siehe `if (!running) return;`
   // ganz am Anfang von loop()). cancelAnimationFrame() ist zusätzliche
@@ -1888,7 +1779,61 @@ function destroy(){
   window.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("keyup", onKeyUp);
 
+  if (canvasResizeObserver) {
+    canvasResizeObserver.disconnect();
+    canvasResizeObserver = null;
+  }
+
   canvas = ctx = hud = settingsBtnEl = permaPanelEl = runPanelEl = null;
+}
+
+/* =========================================================
+   CANVAS-FIT
+   Berechnet die größte 16:9-Box, die in den verfügbaren Platz von
+   .nd-canvas-wrap passt, und setzt sie als CSS-Darstellungsgröße.
+   Setzt zusätzlich die Backing-Store-Auflösung auf CSS-Größe ×
+   devicePixelRatio (statt fix 960×540), damit Text und Kanten auf
+   hochauflösenden/skalierten Displays scharf bleiben — ohne dass sich
+   dadurch die sichtbare Spielfeldgröße ändert. Der komplette Zeichen-
+   code arbeitet weiterhin im festen 960×540-Logik-Koordinatenraum
+   (LOGICAL_W/LOGICAL_H); ctx.setTransform() skaliert das transparent
+   auf die tatsächliche Backing-Store-Auflösung.
+   ========================================================= */
+function fitCanvasToContainer(){
+  if (!canvas || !ctx) return;
+  const wrap = canvas.parentElement;
+  if (!wrap) return;
+
+  const availW = wrap.clientWidth;
+  const availH = wrap.clientHeight;
+  if (availW <= 0 || availH <= 0) return;
+
+  const ratio = LOGICAL_W / LOGICAL_H;
+  let w = availW;
+  let h = w / ratio;
+
+  if (h > availH) {
+    h = availH;
+    w = h * ratio;
+  }
+
+  canvas.style.width  = `${w}px`;
+  canvas.style.height = `${h}px`;
+
+  const dpr = window.devicePixelRatio || 1;
+  const backingW = Math.max(1, Math.round(w * dpr));
+  const backingH = Math.max(1, Math.round(h * dpr));
+
+  // Ändert man canvas.width/height, wird der Inhalt geleert UND der
+  // Kontext-Transform vom Browser auf Identität zurückgesetzt — daher
+  // ctx.setTransform() danach IMMER neu setzen (auch wenn sich die
+  // Backing-Store-Größe gerade nicht geändert hat, schadet es nicht).
+  if (canvas.width !== backingW || canvas.height !== backingH) {
+    canvas.width  = backingW;
+    canvas.height = backingH;
+  }
+
+  ctx.setTransform(backingW / LOGICAL_W, 0, 0, backingH / LOGICAL_H, 0, 0);
 }
 
 window.registerGame({

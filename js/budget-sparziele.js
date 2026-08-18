@@ -40,6 +40,41 @@ function goalMonthlyReserveEquivalent(goal){
   return 0;
 }
 
+// Ein Sparziel gilt als "erfüllt", sobald der angesparte Betrag den
+// Zielbetrag erreicht — steuert, ob der Archivieren-Button auf der Karte
+// erscheint (siehe buildSparzielCard()).
+function goalCompleted(goal){
+  return goal.target > 0 && goal.current >= goal.target - 0.005;
+}
+
+// ── Archiv ───────────────────────────────────────────────────────────
+// Archivieren blendet ein erfülltes Sparziel aus allen aktiven Ansichten
+// aus (Finanzierungs-Grid hier, Übersicht-Liste in budget.js, Geldfluss-
+// Board in budget-analysis.js, Sparprognose in budget-sparprognose.js),
+// OHNE Daten zu löschen — jederzeit über das Archiv (Einstellungen-Button
+// im Budget-Header, siehe budget.js) wieder rückgängig zu machen.
+function archiveGoal(id){
+  const g = budgetGoals.find(x => x.id === id);
+  if (!g) return;
+  g.archived = true;
+  saveBudgetGoals();
+  renderSparziele();
+  if (typeof renderBudgetGoals === 'function') renderBudgetGoals();
+  if (typeof renderFinanzgarten === 'function') renderFinanzgarten();
+  if (typeof renderSparplaner === 'function') renderSparplaner();
+}
+function restoreGoal(id){
+  const g = budgetGoals.find(x => x.id === id);
+  if (!g) return;
+  delete g.archived;
+  saveBudgetGoals();
+  renderSparziele();
+  if (typeof renderBudgetGoals === 'function') renderBudgetGoals();
+  if (typeof renderFinanzgarten === 'function') renderFinanzgarten();
+  if (typeof renderSparplaner === 'function') renderSparplaner();
+  if (typeof renderBudgetArchiv === 'function') renderBudgetArchiv();
+}
+
 // ── Rendering ────────────────────────────────────────────────────────
 function renderSparziele(){
   // War vorher eine DOM-Klassen-Prüfung (classList.contains('hidden')) —
@@ -53,11 +88,14 @@ function renderSparziele(){
   const grid = document.getElementById('sparziele-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  if (!budgetGoals.length) {
+  // Archivierte Sparziele gehören ins Archiv (siehe archiveGoal()), nicht
+  // mehr in diese aktive Ansicht.
+  const visibleGoals = budgetGoals.filter(g => !g.archived);
+  if (!visibleGoals.length) {
     grid.innerHTML = '<div class="empty-state">Noch keine Sparziele. Starte mit „+ Sparziel".</div>';
     return;
   }
-  budgetGoals.forEach(goal => grid.appendChild(buildSparzielCard(goal)));
+  visibleGoals.forEach(goal => grid.appendChild(buildSparzielCard(goal)));
 }
 
 function buildSparzielCard(goal){
@@ -85,11 +123,13 @@ function buildSparzielCard(goal){
     <div class="sz-card-actions">
       <button class="sz-icon-btn" data-action="deposit" title="Einzahlen">+</button>
       <button class="sz-icon-btn" data-action="withdraw" title="Abheben">−</button>
+      ${goalCompleted(goal) ? '<button class="sz-icon-btn" data-action="archive" title="Archivieren">📦</button>' : ''}
       <button class="sp-add-btn sz-edit-pill" data-action="edit">✎ Bearbeiten</button>
     </div>`;
 
   card.querySelector('[data-action="deposit"]').addEventListener('click', () => openGoalTx(goal, 'deposit'));
   card.querySelector('[data-action="withdraw"]').addEventListener('click', () => openGoalTx(goal, 'withdraw'));
+  card.querySelector('[data-action="archive"]')?.addEventListener('click', () => archiveGoal(goal.id));
   card.querySelector('[data-action="edit"]').addEventListener('click', () => openEditGoalModal(goal));
 
   return card;

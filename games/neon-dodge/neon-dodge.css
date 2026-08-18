@@ -15,21 +15,41 @@
   font-family: system-ui, "Segoe UI", Roboto, Arial;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* Füllt die volle Höhe von .games-play-modal-body (siehe games.css) —
+     Voraussetzung dafür, dass der Canvas seine Größe aus echtem
+     verfügbaren Platz berechnen kann, statt nur aus der Breite. */
+  flex: 1;
+  min-height: 0;
 }
 
-/* Neon Dodge braucht mehr Platz als die anderen Spiele (Canvas + 2 Panels).
-   Diese Regel wirkt nur, solange diese CSS-Datei geladen ist — also nur,
-   während Neon Dodge offen ist. Nach dem Schließen ist das Modal wieder
-   in seiner normalen Breite. */
-.games-play-modal-box {
-  width: 620px;
+/* =========================
+   STAGE
+   Ein durchgehender dunkler Hintergrund hinter Score/Settings, Canvas,
+   Boni-Panels und Hints — Neon Dodge lebt vom dunklen Ambiente, daher
+   nicht auf dem hellen Modal-Hintergrund des Hubs "schweben" lassen.
+   Modal bleibt über modalSize: "very-big" (manifest.js) schön groß; die
+   Stage füllt Breite UND Höhe des Modal-Body komplett aus, damit der
+   Canvas maximal viel Platz bekommt (siehe .nd-layout/.nd-canvas-wrap).
+========================= */
+.nd-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--nd-bg-main);
+  border-radius: 20px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* =========================
    TOP BAR (HUD + Settings)
 ========================= */
 .nd-top {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -56,15 +76,48 @@
 }
 
 /* =========================
-   CANVAS
-   width:100% + aspect-ratio skaliert die DARSTELLUNG; die interne
-   Render-Auflösung bleibt 960×540 (über width/height-Attribute am
-   <canvas>) — neon-dodge.js skaliert Maus-Koordinaten entsprechend.
+   LAYOUT: Permanente Boni (links) · Canvas (Mitte) · Run-Boni (rechts)
+   Im sehr breiten "very-big"-Modal (siehe manifest.js modalSize) passt
+   diese Dreispalten-Anordnung nebeneinander; auf schmalen Screens wird
+   unten (Media-Query) auf Stapel-Layout umgeschaltet. align-items bleibt
+   auf dem Default "stretch", damit .nd-canvas-wrap die volle verfügbare
+   Höhe bekommt — genau die Fläche, in die der Canvas maximal skaliert wird.
 ========================= */
+.nd-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.nd-side {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* =========================
+   CANVAS
+   .nd-canvas-wrap ist die volle verfügbare Fläche zwischen den beiden
+   Seitenbereichen; neon-dodge.js (fitCanvasToContainer) berechnet daraus
+   per JS die größte 16:9-Box und setzt sie als CSS-Darstellungsgröße.
+   Die interne Render-Auflösung bleibt unangetastet bei 960×540 — die
+   Maus-Koordinaten werden entsprechend zurückskaliert.
+========================= */
+.nd-canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .nd-canvas {
-  width: 100%;
   display: block;
-  aspect-ratio: 16 / 9;
   background:
     radial-gradient(
       1200px 500px at 50% 30%,
@@ -78,17 +131,8 @@
 
 /* =========================
    SIDE PANELS (Perma / Run)
-   Im Original standen sie neben dem Canvas — im schmaleren Hub-Modal
-   passt das nicht mehr, deshalb liegen sie hier in einer Reihe darunter.
 ========================= */
-.nd-panels {
-  display: flex;
-  gap: 14px;
-}
-
 .nd-panel {
-  flex: 1;
-  min-width: 0;
   background: var(--nd-bg-card);
   border-radius: 14px;
   padding: 12px;
@@ -120,8 +164,8 @@
 ========================= */
 .nd-hint {
   font-size: 12px;
-  opacity: .75;
   line-height: 1.6;
+  opacity: .75;
 }
 
 .neon-dodge-root kbd {
@@ -132,8 +176,28 @@
   border-radius: 6px;
 }
 
-@media (max-width: 560px) {
-  .nd-panels {
+@media (max-width: 820px) {
+  /* Auf sehr kleinen Screens reicht die Höhe oft nicht für Header + beide
+     Seitenbereiche + Canvas übereinander — hier bewusst wieder scrollbar
+     statt Inhalte abzuschneiden. Der Normalfall (Desktop, siehe oben)
+     bleibt ohne Scrollbalken. */
+  .nd-stage {
+    overflow-y: auto;
+  }
+
+  .nd-layout {
     flex-direction: column;
+  }
+
+  .nd-side {
+    flex: none;
+    width: 100%;
+    overflow-y: visible;
+  }
+
+  .nd-canvas-wrap {
+    flex: none;
+    min-height: 220px;
+    width: 100%;
   }
 }

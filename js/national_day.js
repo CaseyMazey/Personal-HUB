@@ -1852,6 +1852,15 @@ function getDayEntries() {
   return NATIONAL_DAYS_DATA[getTodayKey()] || null;
 }
 
+// Verlinkung zur Tagesseite auf nationaldaycalendar.com für "mehr erfahren".
+// Die Seite hat kein CORS-fähiges API und blockt automatisierte Zugriffe
+// (Cloudflare) — die Kurzbeschreibungen bleiben deshalb lokal kuratiert,
+// nur der Link führt live zur Originalseite.
+const ND_MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+function ndDayUrl(date) {
+  return `https://nationaldaycalendar.com/${ND_MONTH_NAMES[date.getMonth()]}/${date.getDate()}`;
+}
+
 // ── Widget mit Accordion-Einträgen ────────────────────────────
 // Alle 3 Einträge bleiben innerhalb der Card.
 // Titel ist klickbar → Beschreibung klappt auf/zu.
@@ -1892,7 +1901,19 @@ function buildWidget(entries) {
 
     const descEl = document.createElement('div');
     descEl.className = 'nd-desc';
-    descEl.textContent = entry.desc || '';
+
+    const descText = document.createElement('p');
+    descText.className = 'nd-desc-text';
+    descText.textContent = entry.desc || '';
+    descEl.appendChild(descText);
+
+    const moreLink = document.createElement('a');
+    moreLink.className = 'nd-more-link';
+    moreLink.href = ndDayUrl(now);
+    moreLink.target = '_blank';
+    moreLink.rel = 'noopener noreferrer';
+    moreLink.textContent = 'Mehr auf National Day Calendar →';
+    descEl.appendChild(moreLink);
 
     titleRow.addEventListener('click', () => {
       const isOpen = item.classList.contains('nd-open');

@@ -636,6 +636,23 @@
 .goal-plant-option:has(input:checked) { border-color: var(--sage); background: var(--sage-bg); }
 .goal-plant-icon { font-size: 18px; }
 .goal-plant-name { font-size: 13px; font-weight: 500; color: var(--text); }
+
+/* Icon-Picker für Einnahmen (recurring-Modal) — selbes Grundmuster wie
+   der Pflanzen-Picker oben, nur als kompaktes umbrechendes Grid statt
+   einer Liste mit Textlabel, da hier nur das Icon selbst zählt. */
+.recurring-icon-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.recurring-icon-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; line-height: 1;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+.recurring-icon-btn:hover { background: var(--surface-3); border-color: var(--sage); }
+.recurring-icon-btn.active { border-color: var(--sage); background: var(--sage-bg); }
 .b-liquidity-card {
   background: var(--surface);
   border-radius: var(--b-radius);
@@ -841,6 +858,20 @@
 }
 .sz-icon-btn:hover { background: var(--sage-bg); color: var(--sage-dark); border-color: var(--sage-border); }
 .sz-edit-pill { margin-left: 2px; white-space: nowrap; }
+
+/* ── Archiv (erfüllte Sparziele / beglichene Schulden) ───────── */
+.budget-archiv-section { margin-bottom: 18px; }
+.budget-archiv-section:last-child { margin-bottom: 0; }
+.budget-archiv-section-title {
+  font-size: 12px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+}
+.budget-archiv-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.budget-archiv-row:last-child { border-bottom: none; }
+.budget-archiv-info { flex: 1; min-width: 0; }
 
 /* ── Finanzierungs-Editor ("Jedem Euro einen Job") — budget-financing.js ── */
 .fin-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; }
@@ -1140,7 +1171,7 @@
 
 .gf-stack { display: flex; flex-direction: column; }
 .gf-stack-item {
-  display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-2);
+  display: flex; justify-content: center; align-items: baseline; gap: 6px; font-size: 11px; color: var(--text-2);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--b-radius-xs);
   padding: 4px 8px; margin-top: calc(-1px - var(--gf-i, 0) * 0px);
   cursor: grab; touch-action: none; user-select: none; transition: background var(--transition);
@@ -1156,8 +1187,8 @@
 .gf-rest-low  { color: var(--b-olive); }
 .gf-rest-over { color: var(--b-red); }
 
-.gf-consumer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 1100px) { .gf-consumer-grid { grid-template-columns: repeat(2, 1fr); } }
+.gf-consumer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .gf-consumer-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .gf-consumer-grid { grid-template-columns: 1fr; } }
 
 .gf-group { display: flex; flex-direction: column; min-width: 0; }
@@ -1488,7 +1519,9 @@
 .sp-plan-card-amounts-of { color: var(--text-3); }
 .sp-plan-card-pct { color: var(--text-3); }
 .sp-plan-card-meta { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--text-3); }
-.sp-plan-open-btn { align-self: flex-start; font-size: 11.5px; padding: 5px 14px; margin-top: 2px; }
+.sp-plan-card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.sp-plan-open-btn { font-size: 11.5px; padding: 5px 14px; }
+.sp-plan-pay-btn { font-size: 11.5px; padding: 5px 14px; }
 
 /* ── Assistent: Variantenauswahl ─────────────────────────────── */
 .sp-wizard-variant-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }

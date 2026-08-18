@@ -7,15 +7,17 @@
 // der anderen Spiele — siehe resetStats()):
 //   neon_dodge_best        Zahl  (Highscore)
 //   neon_dodge_stats       { deaths, coins, longestRun }
-//   neon_dodge_highscores  [{ name, score, coins }, ...]  (Top 5)
+//   neon_dodge_highscores  [{ score, coins }, ...]  (Top 5)
 //   neon_dodge_perma       { speed, hitbox, boost }  (permanente Upgrades)
-//   neon_dodge_player      Zuletzt verwendeter Spielername
+//   neon_dodge_active_run  vollständiger Snapshot des laufenden Runs
+//                          (Score, Position, Boni, Gegner/Coins auf dem
+//                          Feld, ...) — für "Spiel fortsetzen"
 // =========================
 
 window.registerGame({
   id: 'neon-dodge',
   title: 'Neon Dodge',
-  modalSize: "large",
+  modalSize: "very-big",
   description: 'Überlebe so lange du kannst — sammle Coins, weiche allem anderen aus.',
   icon: '⚡',
   accent: 'orange',
@@ -48,7 +50,7 @@ window.registerGame({
   getHighscores() {
     const list = DB.get('neon_dodge_highscores', []);
     return list.map((h, i) => ({
-      label: `${i + 1}. ${h.name}`,
+      label: `${i + 1}. Run`,
       value: `${h.score} Punkte · ${h.coins} Coins`
     }));
   },
@@ -60,6 +62,6 @@ window.registerGame({
     DB.set('neon_dodge_stats', { deaths: 0, coins: 0, longestRun: 0 });
     DB.set('neon_dodge_highscores', []);
     DB.set('neon_dodge_perma', { speed: 0, hitbox: 0, boost: 0 });
-    // Spielername bleibt bewusst erhalten — ist keine Statistik.
+    localStorage.removeItem('neon_dodge_active_run');
   }
 });

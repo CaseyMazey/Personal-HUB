@@ -493,12 +493,32 @@ function wireLibraryGrid() {
 // beim ersten Öffnen — nicht beim Start der App.
 // =========================
 
+// Scroll-Zustand vor dem Öffnen des Play-Modals — wird beim Schließen wieder
+// exakt hergestellt (siehe closeGamePlayModal). Ohne das lässt sich die Seite
+// hinter dem Modal per Mausrad weiterscrollen, obwohl das Modal selbst
+// position:fixed ist — und zwar auch, wenn nur <body> gesperrt wird: der
+// Scrollposition-Wert wandert dann still auf <html> weiter (document.
+// scrollingElement) und "entlädt" sich sichtbar erst beim Entsperren, was
+// beim Schließen zu einem Sprung führt. Deshalb beide Elemente sperren UND
+// die ursprüngliche scrollY explizit wiederherstellen.
+let gamesPlayModalPrevBodyOverflow = null;
+let gamesPlayModalPrevHtmlOverflow = null;
+let gamesPlayModalScrollY = 0;
+
 async function openGamePlayModal(gameId) {
   const game = window.GameHub.registry[gameId];
   if (!game || game.comingSoon) return;
 
   window.GameHub.activeGame = gameId;
   const modalBox = document.querySelector(".games-play-modal-box");
+
+  if (gamesPlayModalPrevBodyOverflow === null) {
+    gamesPlayModalScrollY = window.scrollY;
+    gamesPlayModalPrevBodyOverflow = document.body.style.overflow;
+    gamesPlayModalPrevHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+  }
 
   modalBox.classList.remove("normal", "middle", "big", "very-big");
 
@@ -550,6 +570,14 @@ function closeGamePlayModal() {
   document.getElementById('games-play-modal-overlay').classList.add('hidden');
   document.getElementById('games-play-modal-body').innerHTML = '';
   window.GameHub.activeGame = null;
+
+  if (gamesPlayModalPrevBodyOverflow !== null) {
+    document.body.style.overflow = gamesPlayModalPrevBodyOverflow;
+    document.documentElement.style.overflow = gamesPlayModalPrevHtmlOverflow;
+    gamesPlayModalPrevBodyOverflow = null;
+    gamesPlayModalPrevHtmlOverflow = null;
+    window.scrollTo(0, gamesPlayModalScrollY);
+  }
 
   // Highscores können sich geändert haben → Karten aktualisieren.
   renderLibraryGrid();

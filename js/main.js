@@ -354,7 +354,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
 });
 
 function renderView(name) {
-  if(name==='today')     { renderBlocks(); renderTasks(); refreshTodayTextareas(); }
+  if(name==='today')     { renderBlocks(); renderTasks(); refreshTodayTextareas(); renderGruppendienste(); }
   if(name==='pinboard')  { renderDesk(); }
   if(name==='flashcards'){ renderSubjectList(); }
   if(name==='guides')    { initGuides(); }

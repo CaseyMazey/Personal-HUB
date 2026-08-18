@@ -10,6 +10,7 @@ window.registerGame({
   description: 'Fordere die KI oder einen Freund heraus!',
   icon: '⭕',
   accent: 'purple',
+  modalSize: 'middle', // Platz für den 9-Felder-Aufbau der Ultimate-Variante
 
   // Generisches Format: Liste aus {label, value}. Der Hub zeigt die ersten
   // zwei Einträge auf der Karte, der Stats-Dialog zeigt alle.

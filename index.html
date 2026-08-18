@@ -1003,9 +1003,12 @@
                   <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                 </svg>
               </button>
+              <button class="b-tree-config-btn" id="budget-settings-btn" title="Einstellungen">
+                <span style="font-size:15px;line-height:1;">&#9881;&#65039;</span>
+              </button>
             </div>
           </div>
- 
+
           <!-- ── SUB-TAB: BUDGET (bestehender Inhalt, unverändert) ─── -->
           <div id="budget-panel-budget">
 
@@ -1782,6 +1785,23 @@
           <button class="toggle-select-btn" id="recurring-type-expense">Ausgabe</button>
         </div>
       </div>
+      <div class="modal-row" id="recurring-icon-row">
+        <label>Icon</label>
+        <div class="recurring-icon-picker" id="recurring-icon-picker">
+          <button type="button" class="recurring-icon-btn" data-icon="&#128182;" title="Geld">&#128182;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#128188;" title="Gehalt / Job">&#128188;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#128098;" title="Taschengeld">&#128098;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#127968;" title="Miete">&#127968;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#127873;" title="Geschenk">&#127873;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#127891;" title="Stipendium / BAf&ouml;G">&#127891;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#128646;" title="Fahrtkosten">&#128646;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#128176;" title="Ersparnisse">&#128176;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#128200;" title="Investition">&#128200;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#127808;" title="Gl&uuml;ck / Bonus">&#127808;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#11088;" title="Sonstiges">&#11088;</button>
+          <button type="button" class="recurring-icon-btn" data-icon="&#127918;" title="Nebenjob">&#127918;</button>
+        </div>
+      </div>
       <div class="modal-row"><label>Betrag (&#8364;)</label><input type="number" class="modal-input" id="recurring-amount" placeholder="0.00" step="0.01" min="0"/></div>
       <div class="modal-row"><label>Rhythmus</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -2208,7 +2228,28 @@
       </div>
     </div>
   </div>
- 
+
+  <!-- Budget-Archiv (erfüllte Sparziele / beglichene Schulden) -->
+  <div id="budget-archiv-modal-overlay" class="modal-backdrop hidden">
+    <div class="modal-box" style="width:480px;max-height:76vh;display:flex;flex-direction:column;">
+      <div class="modal-head">
+        <span>&#128230; Archiv</span>
+        <button class="modal-x" id="budget-archiv-modal-close">&#10005;</button>
+      </div>
+      <p class="modal-hint" style="padding:8px 0 6px;">Erfüllte Sparziele und beglichene Schulden landen hier — jederzeit wiederherstellbar.</p>
+      <div style="overflow-y:auto;flex:1;">
+        <div class="budget-archiv-section">
+          <div class="budget-archiv-section-title">&#127919; Sparziele</div>
+          <div id="budget-archiv-goals-list"></div>
+        </div>
+        <div class="budget-archiv-section">
+          <div class="budget-archiv-section-title">&#128179; Schulden</div>
+          <div id="budget-archiv-debts-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Kontostand Modal -->
   <div id="kontostand-modal-overlay" class="modal-backdrop hidden">
     <div class="modal-box" style="width:360px;">
@@ -2458,11 +2499,56 @@
       <div id="games-stats-modal-body" class="games-stats-modal-body"></div>
     </div>
   </div>
- 
+
+  <!-- Gruppendienste: Wochenplan-Modal -->
+  <div id="gd-modal-overlay" class="modal-backdrop hidden">
+    <div class="modal-box" style="width:460px;">
+      <div class="modal-head"><span>Wochenplan · Gruppenpflichten</span><button class="modal-x" id="gd-modal-close">&#10005;</button></div>
+
+      <div class="gd-modal-week-nav">
+        <button type="button" class="week-btn" id="gd-modal-prev" aria-label="Vorherige Woche">&#8249;</button>
+        <span id="gd-modal-week-label">KW —</span>
+        <button type="button" class="week-btn" id="gd-modal-next" aria-label="Nächste Woche">&#8250;</button>
+      </div>
+
+      <div class="modal-row">
+        <label>🗑️ Mülleimer</label>
+        <div class="gd-trio">
+          <input type="text" class="modal-input" id="gd-muell-tn1" placeholder="Tn1" list="gd-names-list" autocomplete="off"/>
+          <input type="text" class="modal-input" id="gd-muell-tn2" placeholder="Tn2" list="gd-names-list" autocomplete="off"/>
+          <input type="text" class="modal-input" id="gd-muell-ersatz" placeholder="Ersatz" list="gd-names-list" autocomplete="off"/>
+        </div>
+      </div>
+
+      <div class="modal-row">
+        <label>💧 Wasser</label>
+        <div class="gd-trio">
+          <input type="text" class="modal-input" id="gd-wasser-tn1" placeholder="Tn1" list="gd-names-list" autocomplete="off"/>
+          <input type="text" class="modal-input" id="gd-wasser-tn2" placeholder="Tn2" list="gd-names-list" autocomplete="off"/>
+          <input type="text" class="modal-input" id="gd-wasser-ersatz" placeholder="Ersatz" list="gd-names-list" autocomplete="off"/>
+        </div>
+      </div>
+
+      <div class="modal-row">
+        <label>🧹 Platz aufräumen</label>
+        <input type="text" class="modal-input" id="gd-aufraeumen" placeholder="z.B. drüben 1  oder  Name1, Name2, Name3" autocomplete="off"/>
+        <span class="modal-hint">Mehrere Personen mit Komma trennen.</span>
+      </div>
+
+      <datalist id="gd-names-list"></datalist>
+
+      <div class="modal-actions">
+        <button id="gd-clear" class="btn-ghost">Woche leeren</button>
+        <button id="gd-save" class="btn-primary">Speichern</button>
+      </div>
+    </div>
+  </div>
+
   <script src="js/main.js"></script>
   <script src="js/hub-utils.js"></script>
   <script src="js/calendar.js"></script>
   <script src="js/today.js"></script>
+  <script src="js/gruppendienste.js"></script>
   <script src="js/pinboard.js"></script>
   <script src="js/flashcards.js"></script>
   <script src="js/guides.js"></script>

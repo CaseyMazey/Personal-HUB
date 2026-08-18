@@ -13,12 +13,17 @@
 //     null = erbt vom verknüpften Sparziel, sonst Summe der Raten),
 //     startDate, endDate, interval,
 //     method: 'constant'|'increasing'|'decreasing'|'custom',
-//     entries: [{ id, date, amount, done, linkedOnetimeId }],
+//     entries: [{ id, date, amount, done, linkedOnetimeId,
+//       appliedGoalId — welches Sparziel bei der Einzahlung TATSÄCHLICH
+//       gutgeschrieben wurde (siehe sparplanApplyDeposit()); bleibt auch
+//       dann korrekt, wenn plan.goalId danach übers Bearbeiten geändert
+//       wird — undefined bei Raten von vor diesem Feld }],
 //     goalId: null | <budgetGoals.id> — optionale Verknüpfung zu einem
-//       Sparziel (budget.js). Das Sparziel ist seit der Sparziele-
-//       Umstellung die EINZIGE Datenquelle für Finanzierungsquellen und
-//       Reservierung — ein Plan hält dafür keine eigenen Werte mehr
-//       (siehe budget-sparziele.js).
+//       Sparziel (budget.js), über den Assistenten (auch nachträglich)
+//       änderbar. Das Sparziel ist seit der Sparziele-Umstellung die
+//       EINZIGE Datenquelle für Finanzierungsquellen und Reservierung —
+//       ein Plan hält dafür keine eigenen Werte mehr (siehe
+//       budget-sparziele.js).
 //     linkedToBudget (Legacy-Alias, nicht mehr aktiv genutzt),
 //     createdAt }
 // Muss NACH budget.js und budget-sparziele.js geladen werden.
@@ -330,7 +335,30 @@ function buildSparplanCard(plan){
       <span>${next ? `Nächste Rate: ${fmtEuro(next.amount)} · ${sparplanEntryLabel(plan, next)}` : 'Alle Raten erledigt 🎉'}</span>
       <span>${sparplanRemainingTimeLabel(plan)}</span>
     </div>
-    <button class="btn-ghost sp-plan-open-btn">Öffnen</button>`;
+    <div class="sp-plan-card-actions">
+      ${next ? `<button class="btn-primary sp-plan-pay-btn">${fmtEuro(next.amount)} einzahlen</button>` : ''}
+      <button class="btn-ghost sp-plan-open-btn">Öffnen</button>
+    </div>`;
+  // Einzahlen direkt aus der Übersicht — nutzt exakt dieselbe Funktion wie
+  // der "Erledigt"-Button in der Detailansicht (sparplanApplyDeposit()),
+  // damit Finanzierungsquellen/Reservierung/Sparziel-Fortschritt/Budget-
+  // Buchung garantiert identisch behandelt werden, keine zweite Logik.
+  const payBtn = card.querySelector('.sp-plan-pay-btn');
+  if (payBtn) {
+    payBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      // Frisch holen statt der Closure-Variable "next" zu vertrauen — falls
+      // sich der Plan zwischen Rendern und Klick geändert haben sollte, ist
+      // das garantiert die tatsächlich nächste offene Rate (keine Doppel-
+      // buchung derselben Rate möglich).
+      const entry = sparplanNextEntry(plan);
+      if (!entry) return;
+      entry.done = true;
+      sparplanApplyDeposit(plan, entry);
+      saveBudgetSavingsPlans();
+      refreshAfterDepositChange();
+    });
+  }
   card.querySelector('.sp-plan-open-btn').addEventListener('click', () => openSparplanDetail(plan.id));
   return card;
 }
@@ -369,6 +397,11 @@ let spwInterval = 'weekly'; // gemeinsames Intervall für den GESAMTEN individue
 let spwCustomEntries = []; // [{amount}] — DIE eine Ratenliste, additiv befüllt. Position = Index im Array, keine Kalenderdaten.
 let spwGeneratorMethodsUsed = new Set(); // welche Werkzeuge für diesen Plan benutzt wurden (fürs Detail-Label)
 let spwRandomPreview = [];  // Vorschau-Puffer für "Zufällige Beträge" (reine Beträge), vor "Zur Liste hinzufügen"
+// null = Assistent legt einen NEUEN Plan an; sonst die ID des Plans, der
+// gerade bearbeitet wird (siehe openSparplanWizard(editPlan)) — derselbe
+// Assistent, derselbe Speichern-Handler, nur mit vorbefüllten Feldern und
+// Update-statt-Push beim Speichern.
+let spwEditingPlanId = null;
 
 // ── Sparziel-Verknüpfung (geteilter Block) ──────────────────────────
 // Finanzierungsquellen/Reservierung werden NUR NOCH beim Anlegen eines
@@ -664,14 +697,23 @@ function renderSpwTemplateList() {
   });
 }
 
-function openSparplanWizard() {
+// editPlan: null → Assistent legt einen neuen Plan an (wie bisher).
+// Ein Plan-Objekt → derselbe Assistent dient als vollständiger Editor:
+// alle Felder werden aus dem Plan vorbefüllt, die Variante (Zielbetrag/
+// Rate/Individuell) steht fest (kein Zurück zur Variantenauswahl — sie
+// zu wechseln würde die Berechnungsgrundlage des Plans ändern), und
+// "Speichern" aktualisiert den bestehenden Plan statt einen neuen
+// anzulegen (siehe sparplan-wizard-save-Handler unten).
+function openSparplanWizard(editPlan = null) {
+  spwEditingPlanId = editPlan ? editPlan.id : null;
   spwVariant = null;
   spwMethod  = 'constant';
   spwInterval = 'weekly';
   spwCustomEntries = [];
   spwGeneratorMethodsUsed = new Set();
   spwRandomPreview = [];
-  document.getElementById('sparplan-wizard-title').textContent = 'Neuer Sparplan';
+  document.getElementById('sparplan-wizard-title').textContent = editPlan ? 'Sparplan bearbeiten' : 'Neuer Sparplan';
+  document.getElementById('sparplan-wizard-save').textContent = editPlan ? 'Speichern' : 'Sparplan erstellen';
   ['spw-target-name','spw-target-amount','spw-target-start','spw-target-end',
    'spw-rate-name','spw-rate-amount','spw-rate-start','spw-rate-end',
    'spw-custom-name',
@@ -691,7 +733,70 @@ function openSparplanWizard() {
   renderSpwCustomRows();
   showSpwCustomSection('main');
   resetSpwGoalLink();
-  showSpwStep('variant');
+
+  if (editPlan) {
+    // Variante aus den vorhandenen Plan-Daten ableiten: 'custom' erkennt
+    // man am method-Feld, 'target' an einem gesetzten targetAmount-Override
+    // (bei 'rate' ist targetAmount immer null, siehe Speichern-Logik unten).
+    spwVariant = editPlan.method === 'custom' ? 'custom'
+      : (typeof editPlan.targetAmount === 'number' && editPlan.targetAmount > 0) ? 'target' : 'rate';
+
+    if (spwVariant === 'target') {
+      document.getElementById('spw-target-name').value = editPlan.name;
+      document.getElementById('spw-target-amount').value = editPlan.targetAmount;
+      document.getElementById('spw-target-start').value = editPlan.startDate || '';
+      document.getElementById('spw-target-end').value = editPlan.endDate || '';
+      document.getElementById('spw-target-interval').value = editPlan.interval;
+      spwMethod = editPlan.method;
+      document.querySelectorAll('#sparplan-wizard-step-target .toggle-select-btn').forEach(b => b.classList.toggle('active', b.dataset.method === editPlan.method));
+      updateSpwTargetPreview();
+    } else if (spwVariant === 'rate') {
+      // Die Sparrate selbst wird nicht separat gespeichert (nur die
+      // einzelnen Raten-Beträge) — die noch offene erste Rate ist der
+      // beste verfügbare Rückschluss auf den ursprünglich eingegebenen Wert.
+      const upcoming = sparplanOrderedEntries(editPlan, false);
+      const rateGuess = upcoming.length ? upcoming[0].amount : (editPlan.entries[editPlan.entries.length - 1]?.amount || 0);
+      document.getElementById('spw-rate-name').value = editPlan.name;
+      document.getElementById('spw-rate-amount').value = rateGuess;
+      document.getElementById('spw-rate-start').value = editPlan.startDate || '';
+      document.getElementById('spw-rate-end').value = editPlan.endDate || '';
+      document.getElementById('spw-rate-interval').value = editPlan.interval;
+      updateSpwRatePreview();
+    } else {
+      document.getElementById('spw-custom-name').value = editPlan.name;
+      spwInterval = editPlan.interval;
+      document.querySelectorAll('#spw-custom-interval-picker .toggle-select-btn').forEach(b => b.classList.toggle('active', b.dataset.interval === editPlan.interval));
+      // Nur die noch OFFENEN Raten sind hier editierbar — bereits erledigte
+      // bleiben unangetastet und werden beim Speichern automatisch wieder
+      // vorangestellt (siehe sparplan-wizard-save-Handler).
+      spwCustomEntries = sparplanOrderedEntries(editPlan, false).map(e => ({ amount: e.amount }));
+      spwGeneratorMethodsUsed = new Set(Array.isArray(editPlan.generatorMethods) ? editPlan.generatorMethods : []);
+      renderSpwCustomRows();
+    }
+
+    // Bestehende Sparziel-Verknüpfung vorbelegen — bearbeitbar wie beim
+    // Erstellen (inkl. Wechsel auf ein anderes/kein Sparziel).
+    if (editPlan.goalId) {
+      spwGoalMode = 'existing';
+      const btn = document.querySelector('#sparplan-wizard-step-link [data-goalmode="existing"]');
+      document.querySelectorAll('#sparplan-wizard-step-link [data-goalmode]').forEach(b => b.classList.toggle('active', b === btn));
+      document.getElementById('spw-goal-existing-row').classList.remove('hidden');
+      document.getElementById('spw-goal-funding-existing-row').classList.remove('hidden');
+      renderSpwGoalSelect();
+      const sel = document.getElementById('spw-goal-select');
+      if (sel) sel.value = editPlan.goalId;
+      spwGoalId = editPlan.goalId;
+      renderSpwGoalFundingExisting();
+    }
+
+    showSpwStep(spwVariant);
+    // Variantenwechsel ist beim Bearbeiten bewusst nicht vorgesehen (siehe
+    // Kommentar oben) — "Zurück" hätte hier keine sinnvolle Zielansicht.
+    document.getElementById('sparplan-wizard-back').classList.add('hidden');
+  } else {
+    showSpwStep('variant');
+  }
+
   document.getElementById('sparplan-wizard-modal-overlay').classList.remove('hidden');
 }
 function closeSparplanWizard() {
@@ -792,6 +897,17 @@ document.getElementById('sparplan-wizard-modal-overlay').addEventListener('click
 });
 
 document.getElementById('sparplan-wizard-save').addEventListener('click', () => {
+  // Beim Bearbeiten: bereits erledigte Raten bleiben unangetastet (Historie
+  // ist Fakt, wird nie neu berechnet) — nur die noch OFFENEN Raten werden
+  // nach den (ggf. geänderten) Parametern neu erzeugt, exakt wie beim
+  // erstmaligen Anlegen. id/image/createdAt bleiben erhalten.
+  const editPlan = spwEditingPlanId ? getSparplanById(spwEditingPlanId) : null;
+  const doneEntries = editPlan ? editPlan.entries.filter(e => e.done) : [];
+  // Termine, die bereits als erledigte Rate existieren, dürfen bei der
+  // Neuerzeugung NICHT nochmal auftauchen (sonst doppelter Kalendertag —
+  // einmal erledigt, einmal neu offen). Betrifft nur target/rate (echte
+  // Kalenderdaten); "Individuell" hat ohnehin keine Daten.
+  const doneDateStrs = new Set(doneEntries.map(e => e.date));
   let plan = null;
 
   if (spwVariant === 'target') {
@@ -803,11 +919,20 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
     if (!name || !amount || amount <= 0 || !start || !end || start > end) {
       alert('Bitte Name, Zielbetrag sowie ein gültiges Start- und Zieldatum angeben.'); return;
     }
-    const dates   = sparplanGenerateDates(start, end, interval);
-    const amounts = sparplanDistribute(dates.length, round2(amount), spwMethod);
-    plan = { id: sparplanNewId(), name, image: null, targetAmount: round2(amount),
-      startDate: start, endDate: end, interval, method: spwMethod,
-      entries: sparplanBuildEntries(dates, amounts), linkedToBudget: false, createdAt: Date.now() };
+    const dates = sparplanGenerateDates(start, end, interval).filter(d => !doneDateStrs.has(sparplanDateStr(d)));
+    // Bereits eingezahlte Raten zählen auf den Zielbetrag — nur der REST
+    // wird auf die neu erzeugten künftigen Termine verteilt. Ist der Rest
+    // bereits gedeckt (z. B. Zielbetrag beim Bearbeiten gesenkt), entstehen
+    // keine neuen Raten mehr.
+    const alreadySaved = round2(doneEntries.reduce((s, e) => s + e.amount, 0));
+    const remaining = round2(Math.max(0, round2(amount) - alreadySaved));
+    const freshEntries = remaining > 0.005
+      ? sparplanBuildEntries(dates, sparplanDistribute(dates.length, remaining, spwMethod))
+      : [];
+    plan = { id: editPlan ? editPlan.id : sparplanNewId(), name, image: editPlan ? editPlan.image : null,
+      targetAmount: round2(amount), startDate: start, endDate: end, interval, method: spwMethod,
+      entries: [...doneEntries, ...freshEntries], linkedToBudget: false,
+      createdAt: editPlan ? editPlan.createdAt : Date.now() };
 
   } else if (spwVariant === 'rate') {
     const name  = document.getElementById('spw-rate-name').value.trim();
@@ -818,18 +943,19 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
     if (!name || !rate || rate <= 0 || !start || !end || start > end) {
       alert('Bitte Name, Sparrate sowie ein gültiges Start- und Enddatum angeben.'); return;
     }
-    const dates   = sparplanGenerateDates(start, end, interval);
+    const dates   = sparplanGenerateDates(start, end, interval).filter(d => !doneDateStrs.has(sparplanDateStr(d)));
     const amounts = new Array(dates.length).fill(round2(rate));
-    plan = { id: sparplanNewId(), name, image: null, targetAmount: null,
-      startDate: start, endDate: end, interval, method: 'constant',
-      entries: sparplanBuildEntries(dates, amounts), linkedToBudget: false, createdAt: Date.now() };
+    plan = { id: editPlan ? editPlan.id : sparplanNewId(), name, image: editPlan ? editPlan.image : null,
+      targetAmount: null, startDate: start, endDate: end, interval, method: 'constant',
+      entries: [...doneEntries, ...sparplanBuildEntries(dates, amounts)], linkedToBudget: false,
+      createdAt: editPlan ? editPlan.createdAt : Date.now() };
 
   } else if (spwVariant === 'custom') {
     const name  = document.getElementById('spw-custom-name').value.trim();
     // KEINE Sortierung — die Array-Reihenfolge IST die Position (Woche 1,
     // Woche 2, ...), es gibt keine Kalenderdaten zum Sortieren.
     const valid = spwCustomEntries.filter(e => e.amount > 0);
-    if (!name || valid.length === 0) {
+    if (!name || (doneEntries.length === 0 && valid.length === 0)) {
       alert('Bitte einen Namen und mindestens eine gültige Rate angeben.'); return;
     }
     const stamp = Date.now().toString(36);
@@ -838,11 +964,11 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
     // bei targetAmount:null automatisch aus entries[] ab). Kein Start-/
     // Enddatum: plan.interval ist das gemeinsame Intervall, anhand dessen
     // sparplanEntryLabel() die Positionen ("Woche N") beschriftet.
-    plan = { id: sparplanNewId(), name, image: null, targetAmount: null,
-      startDate: null, endDate: null, interval: spwInterval, method: 'custom',
+    plan = { id: editPlan ? editPlan.id : sparplanNewId(), name, image: editPlan ? editPlan.image : null,
+      targetAmount: null, startDate: null, endDate: null, interval: spwInterval, method: 'custom',
       generatorMethods: [...spwGeneratorMethodsUsed],
-      entries: valid.map((e, i) => ({ id: `spe_${stamp}_${i}`, amount: round2(e.amount), done: false })),
-      linkedToBudget: false, createdAt: Date.now() };
+      entries: [...doneEntries, ...valid.map((e, i) => ({ id: `spe_${stamp}_${i}`, amount: round2(e.amount), done: false }))],
+      linkedToBudget: false, createdAt: editPlan ? editPlan.createdAt : Date.now() };
   }
 
   if (!plan) return;
@@ -855,6 +981,10 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
   // 'new': neues Sparziel aus den Plan-Eckdaten anlegen (Name des Plans,
   //   Zielbetrag falls vorhanden, sonst aus den Raten abgeleitet) —
   //   inkl. der im Wizard gewählten Finanzierungsquellen/Reservierung.
+  // Gilt unverändert auch beim Bearbeiten — inkl. Wechsel auf ein anderes
+  // oder gar kein Sparziel mehr. Bereits verbuchte Einzahlungen bleiben
+  // dabei korrekt dem ZUM ZEITPUNKT DER EINZAHLUNG verknüpften Sparziel
+  // zugeordnet (siehe entry.appliedGoalId in sparplanApplyDeposit()).
   plan.goalId = null;
   if (spwGoalMode === 'existing' && spwGoalId) {
     plan.goalId = spwGoalId;
@@ -878,12 +1008,17 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
     plan.goalId = newGoal.id;
   }
 
-  budgetSavingsPlans.push(plan);
+  if (editPlan) {
+    const idx = budgetSavingsPlans.findIndex(p => p.id === editPlan.id);
+    if (idx !== -1) budgetSavingsPlans[idx] = plan; else budgetSavingsPlans.push(plan);
+  } else {
+    budgetSavingsPlans.push(plan);
+  }
   saveBudgetSavingsPlans();
   closeSparplanWizard();
   renderSparplaeneGrid();
-  // Sparziel-Karten, Finanzgarten und Sparprognose spiegeln die neue
-  // Verknüpfung/Reservierung sofort wider.
+  // Sparziel-Karten, Finanzgarten und Sparprognose spiegeln die neue/
+  // geänderte Verknüpfung/Reservierung sofort wider.
   if (typeof renderBudgetGoals === 'function') renderBudgetGoals();
   if (typeof renderFinanzgarten === 'function') renderFinanzgarten();
   if (typeof renderSparplaner   === 'function') renderSparplaner();
@@ -891,22 +1026,28 @@ document.getElementById('sparplan-wizard-save').addEventListener('click', () => 
   if (typeof renderMainCards === 'function' && typeof budgetMonth !== 'undefined') {
     renderMainCards(budgetMonth, budgetMonthKey(budgetMonth));
   }
+  // Nach dem Bearbeiten zurück in die Detailansicht dieses Plans (statt nur
+  // zur Übersicht) — fühlt sich an wie "Änderung gespeichert, hier ist das
+  // Ergebnis", analog zum bisherigen Inline-Editieren in der Detailansicht.
+  if (editPlan) openSparplanDetail(plan.id);
 });
 
 const spAddPlanBtn = document.getElementById('sparplan-add-plan-btn');
-if (spAddPlanBtn) spAddPlanBtn.addEventListener('click', openSparplanWizard);
+if (spAddPlanBtn) spAddPlanBtn.addEventListener('click', () => openSparplanWizard());
 
 // =========================
 // SPARPLÄNE — DETAILANSICHT
-// Stammdaten, Fortschritt, Historie, zukünftige Raten, Bearbeiten,
-// Löschen. Jede Rate ist einzeln als erledigt markierbar.
+// Stammdaten, Fortschritt, Historie, zukünftige Raten, Löschen. Jede Rate
+// ist einzeln als erledigt markierbar. Vollständiges Bearbeiten (Name,
+// Zielbetrag, Zeitraum, Intervall, Sparart, Sparziel-Verknüpfung, ...)
+// läuft über denselben Assistenten wie beim Anlegen (siehe
+// sparplan-detail-edit-btn unten / openSparplanWizard(plan)) — kein
+// separates, eingeschränktes Inline-Bearbeiten hier mehr.
 // =========================
 let spDetailPlanId  = null;
-let spDetailEditing = false;
 
 function openSparplanDetail(id) {
   spDetailPlanId  = id;
-  spDetailEditing = false;
   renderSparplanDetailBody();
   document.getElementById('sparplan-detail-modal-overlay').classList.remove('hidden');
 }
@@ -939,21 +1080,16 @@ function renderSparplanDetailBody() {
       methodLabel = SP_CUSTOM_GENERATORS[plan.generatorMethod].label;
     }
   }
-  const nameField = spDetailEditing
-    ? `<input type="text" class="modal-input" id="sp-detail-edit-name" value="${plan.name}" style="max-width:220px;"/>`
-    : `<span>${plan.name}</span>`;
-  const targetField = (spDetailEditing && typeof plan.targetAmount === 'number')
-    ? `<input type="number" class="modal-input" id="sp-detail-edit-target" value="${plan.targetAmount}" step="0.01" min="0" style="max-width:140px;"/>`
-    : `<span>${fmtEuro(target)}</span>`;
-
   // "Individuell" hat keinen Zeitraum (keine Kalenderdaten) — stattdessen
   // die Anzahl der Raten anzeigen.
   const zeitraumRow = plan.method === 'custom'
     ? `<div class="sp-detail-row"><span>Anzahl Raten</span><span>${plan.entries.length}</span></div>`
     : `<div class="sp-detail-row"><span>Zeitraum</span><span>${sparplanFormatDate(plan.startDate)} – ${sparplanFormatDate(plan.endDate)}</span></div>`;
 
-  // Sparziel-Verknüpfung — rein informativ, Bearbeitung läuft über den
-  // Sparziele-Tab (keine doppelte Bearbeitungslogik).
+  // Sparziel-Verknüpfung — welches Sparziel verknüpft ist, lässt sich hier
+  // über "Bearbeiten" ändern; Name/Zielbetrag/Priorität/Finanzierung DES
+  // Sparziels selbst bleiben weiterhin ausschließlich im Sparziele-Tab
+  // editierbar (keine doppelte Bearbeitungslogik für dieselben Felder).
   const linkedGoal = plan.goalId ? (budgetGoals.find(g => g.id === plan.goalId) || null) : null;
   const goalRow = linkedGoal
     ? `<div class="sp-detail-row"><span>Sparziel</span><span>🔗 ${linkedGoal.name}</span></div>`
@@ -968,18 +1104,14 @@ function renderSparplanDetailBody() {
 
   body.innerHTML = `
     <div class="sp-detail-stammdaten">
-      <div class="sp-detail-row"><span>Name</span>${nameField}</div>
-      <div class="sp-detail-row"><span>Zielbetrag</span>${targetField}</div>
+      <div class="sp-detail-row"><span>Name</span><span>${plan.name}</span></div>
+      <div class="sp-detail-row"><span>Zielbetrag</span><span>${fmtEuro(target)}</span></div>
       ${zeitraumRow}
       <div class="sp-detail-row"><span>Intervall</span><span>${SP_INTERVAL_META[plan.interval]?.label || plan.interval}</span></div>
       <div class="sp-detail-row"><span>Sparart</span><span>${methodLabel}</span></div>
       ${goalRow}
       ${fundingRow}
     </div>
-    ${spDetailEditing ? `<div class="modal-row" style="flex-direction:row;gap:8px;margin-top:8px;">
-        <button class="btn-ghost" id="sp-detail-edit-cancel">Abbrechen</button>
-        <button class="btn-primary" id="sp-detail-edit-save">Speichern</button>
-      </div>` : ''}
 
     <div class="budget-goal-bar sp-plan-bar" style="margin-top:14px;"><div class="budget-goal-fill" style="width:${pct}%"></div></div>
     <div class="sp-plan-card-row"><span>${fmtEuro(current)} / ${fmtEuro(target)}</span><span>${pct}%</span></div>
@@ -989,23 +1121,6 @@ function renderSparplanDetailBody() {
 
     <div class="sp-detail-section-title">Historie</div>
     <div class="sp-detail-entry-list" id="sp-detail-history">${done.length ? '' : '<div class="empty-state">Noch nichts erledigt.</div>'}</div>`;
-
-  if (spDetailEditing) {
-    document.getElementById('sp-detail-edit-cancel').addEventListener('click', () => { spDetailEditing = false; renderSparplanDetailBody(); });
-    document.getElementById('sp-detail-edit-save').addEventListener('click', () => {
-      const newName = document.getElementById('sp-detail-edit-name').value.trim();
-      if (newName) plan.name = newName;
-      const targetInput = document.getElementById('sp-detail-edit-target');
-      if (targetInput) {
-        const v = parseFloat(targetInput.value);
-        if (v > 0) plan.targetAmount = round2(v);
-      }
-      saveBudgetSavingsPlans();
-      spDetailEditing = false;
-      renderSparplanDetailBody();
-      renderSparplaeneGrid();
-    });
-  }
 
   const upcomingEl = document.getElementById('sp-detail-upcoming');
   upcoming.forEach(e => {
@@ -1070,6 +1185,11 @@ function sparplanApplyDeposit(plan, entry){
     const goal = budgetGoals.find(g => g.id === plan.goalId);
     if (goal) { goal.current = round2((goal.current || 0) + entry.amount); saveBudgetGoals(); }
   }
+  // Merkt sich, welches Sparziel TATSÄCHLICH gutgeschrieben wurde (kann seit
+  // der Sparplan-Bearbeitung von plan.goalId abweichen, falls die
+  // Verknüpfung NACH dieser Einzahlung geändert wurde) — sparplanRevertDeposit()
+  // muss immer genau dieses Ziel wieder zurückbuchen, nicht das aktuelle.
+  entry.appliedGoalId = plan.goalId || null;
 }
 
 function sparplanRevertDeposit(plan, entry){
@@ -1082,10 +1202,16 @@ function sparplanRevertDeposit(plan, entry){
     kontostand = round2(kontostand + entry.amount);
     saveKontostand();
   }
-  if (plan.goalId) {
-    const goal = budgetGoals.find(g => g.id === plan.goalId);
+  // Fallback auf plan.goalId für Raten, die vor diesem Fix eingezahlt wurden
+  // (noch ohne entry.appliedGoalId) — für alle danach ist appliedGoalId die
+  // verlässliche Quelle, unabhängig von einer zwischenzeitlich geänderten
+  // Sparziel-Verknüpfung des Plans.
+  const targetGoalId = entry.appliedGoalId !== undefined ? entry.appliedGoalId : plan.goalId;
+  if (targetGoalId) {
+    const goal = budgetGoals.find(g => g.id === targetGoalId);
     if (goal) { goal.current = round2(Math.max(0, (goal.current || 0) - entry.amount)); saveBudgetGoals(); }
   }
+  entry.appliedGoalId = null;
 }
 
 // Aktualisiert nach einer Ein-/Auszahlung alle betroffenen Bereiche
@@ -1096,7 +1222,12 @@ function refreshAfterDepositChange(){
   renderSparplaeneGrid();
 }
 
-document.getElementById('sparplan-detail-edit-btn').addEventListener('click', () => { spDetailEditing = true; renderSparplanDetailBody(); });
+document.getElementById('sparplan-detail-edit-btn').addEventListener('click', () => {
+  const plan = getSparplanById(spDetailPlanId);
+  if (!plan) return;
+  closeSparplanDetail();
+  openSparplanWizard(plan);
+});
 document.getElementById('sparplan-detail-close').addEventListener('click', closeSparplanDetail);
 document.getElementById('sparplan-detail-done-btn').addEventListener('click', closeSparplanDetail);
 document.getElementById('sparplan-detail-modal-overlay').addEventListener('click', e => {

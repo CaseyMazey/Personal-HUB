@@ -51,3 +51,123 @@
 .ttt-score-x { color: var(--prio-1); }
 .ttt-score-o { color: var(--sage); }
 .ttt-score-sep { color: var(--text-3); }
+
+/* =========================
+   VARIANTEN — gemeinsame Bausteine
+========================= */
+
+.ttt-variant-info {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+  text-align: center;
+  padding: 0 6px;
+}
+
+.ttt-status-hint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* =========================
+   DISAPPEARING — ältestes Zeichen vor dem Verschwinden
+========================= */
+
+.ttt-cell.fading {
+  border-style: dashed;
+  border-color: var(--text-3);
+  animation: ttt-fading-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes ttt-fading-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* =========================
+   ULTIMATE — großes 3×3-Raster aus kleinen Tic-Tac-Toe-Spielen
+========================= */
+
+.ttt-ultimate-board {
+  display: grid;
+  grid-template-columns: repeat(3, 138px);
+  grid-template-rows: repeat(3, 138px);
+  gap: 10px;
+  width: 434px;
+  margin: 0 auto;
+}
+
+.ttt-mini-board {
+  position: relative;
+  width: 138px;
+  height: 138px;
+  padding: 6px;
+  border-radius: var(--radius);
+  border: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  transition: border-color var(--transition), opacity var(--transition), box-shadow var(--transition);
+}
+
+.ttt-mini-board.active-board { border-color: var(--sage); box-shadow: 0 0 0 3px var(--sage-bg); }
+.ttt-mini-board.locked { opacity: 0.4; }
+.ttt-mini-board.mini-done { background: var(--surface); }
+
+/* Auswahlschritt: der Gewinner (oder bei Unentschieden der Mensch bzw.
+   der Zufall) bestimmt, welches offene Feld als Nächstes gesperrt wird. */
+.ttt-mini-board.pickable-board {
+  cursor: pointer;
+  border-color: var(--sage);
+  animation: ttt-pick-pulse 1.1s ease-in-out infinite;
+}
+.ttt-mini-board.pickable-board:hover { background: var(--sage-bg); }
+
+@keyframes ttt-pick-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--sage-bg); }
+  50%      { box-shadow: 0 0 0 6px var(--sage-bg); }
+}
+
+.ttt-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+}
+
+.ttt-mini-cell {
+  border-radius: calc(var(--radius) * 0.5);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.ttt-mini-cell:not(.filled):not(:disabled):hover { background: var(--sage-bg); border-color: var(--sage); }
+.ttt-mini-cell.x-cell { color: var(--prio-1); }
+.ttt-mini-cell.o-cell { color: var(--sage); }
+.ttt-mini-cell.winning { background: var(--sage-bg); }
+.ttt-mini-cell:disabled { cursor: default; }
+
+.ttt-mini-overlay {
+  position: absolute;
+  inset: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--surface);
+  opacity: 0.95;
+  font-size: 48px;
+  font-weight: 800;
+}
+
+.ttt-mini-overlay.x-cell { color: var(--prio-1); }
+.ttt-mini-overlay.o-cell { color: var(--sage); }
+.ttt-mini-overlay.draw { color: var(--text-3); font-size: 30px; font-weight: 700; }

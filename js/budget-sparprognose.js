@@ -128,19 +128,41 @@ function sparplanerAllRates() {
 // Reihenfolge (Array-Index) als Tie-Breaker erhalten — die Sortierung
 // per Priorität ergänzt die manuelle Sortierung also, statt sie zu
 // ersetzen.
+// Archivierte Sparziele (siehe archiveGoal() in budget-sparziele.js) sind
+// erledigt und dürfen in der Sparprognose nicht mehr auftauchen — weder
+// als Zeile noch in der ETA-/Prioritäts-Berechnung. Zentrale Stelle, damit
+// alle Sparprognose-Funktionen (Priorisierung, ETAs, Zeitstrahl, Simulator,
+// Zusammenfassung) garantiert dieselbe, konsistent indizierte Liste sehen.
+function sparplanerActiveGoals() {
+  return budgetGoals.filter(g => !g.archived);
+}
+
 const GOAL_PRIO_ORDER = { must: 0, need: 1, want: 2 };
 function sparplanerAllocationOrder() {
-  return budgetGoals.map((_, i) => i).sort((a, b) => {
-    const pa = GOAL_PRIO_ORDER[budgetGoals[a].priority] ?? 1;
-    const pb = GOAL_PRIO_ORDER[budgetGoals[b].priority] ?? 1;
+  const goals = sparplanerActiveGoals();
+  return goals.map((_, i) => i).sort((a, b) => {
+    const pa = GOAL_PRIO_ORDER[goals[a].priority] ?? 1;
+    const pb = GOAL_PRIO_ORDER[goals[b].priority] ?? 1;
     return pa !== pb ? pa - pb : a - b;
   });
 }
 
 function sparplanerETAs(monthlyRate) {
+  const goals = sparplanerActiveGoals();
   const order = sparplanerAllocationOrder();
   const n = order.length;
-  const remaining = order.map(idx => round2(Math.max(0, budgetGoals[idx].target - budgetGoals[idx].current)));
+  const remaining = order.map(idx => round2(Math.max(0, goals[idx].target - goals[idx].current)));
+  // KORREKTUR (gemeldeter Berechnungsfehler): ein für dieses Ziel
+  // reservierter monatlicher Betrag (goalOwnMonthlyReserved(), siehe
+  // budget-financing.js) wurde zwar korrekt vom allgemeinen freien
+  // Sparbetrag abgezogen (sparplanerReservedTotal()), aber hier bei der
+  // Zielprognose bisher komplett ignoriert — das Ziel bekam NUR seinen
+  // Anteil aus dem übrig gebliebenen freien Pool, obwohl die reservierten
+  // 125 €/Monat längst fest für genau dieses Ziel eingeplant sind. Jetzt
+  // fließt der reservierte Betrag zusätzlich, unabhängig von der
+  // allgemeinen Prioritäts-Verteilung, direkt in den Fortschritt DIESES
+  // Ziels ein (siehe Zuteilung unten).
+  const ownReserved = order.map(idx => typeof goalOwnMonthlyReserved === 'function' ? goalOwnMonthlyReserved(goals[idx]) : 0);
   const results = new Array(n).fill(null);
   const now = new Date(); now.setDate(1); now.setHours(0, 0, 0, 0);
 
@@ -151,24 +173,46 @@ function sparplanerETAs(monthlyRate) {
 
   function toGoalIndexArray() {
     // Ergebnisse (in Zuteilungs-Reihenfolge) zurück in die ursprüngliche
-    // budgetGoals-Reihenfolge einsortieren — alle bestehenden Aufrufer
-    // (renderSparplanGoals, Zeitstrahl, Simulator, ...) greifen weiterhin
-    // per goals-Index zu und müssen von der internen Priorisierung nichts wissen.
+    // Reihenfolge der AKTIVEN Sparziele einsortieren — alle bestehenden
+    // Aufrufer (renderSparplanGoals, Zeitstrahl, Simulator, ...) greifen
+    // weiterhin per Index zu und müssen von der internen Priorisierung
+    // nichts wissen. Index bezieht sich auf sparplanerActiveGoals(), NICHT
+    // mehr auf das rohe budgetGoals (das könnte archivierte Ziele enthalten).
     const byGoalIndex = new Array(n);
     order.forEach((goalIdx, i) => {
       byGoalIndex[goalIdx] = results[i]
-        ? { goal: budgetGoals[goalIdx], reached: results[i].months === 0, months: results[i].months, date: results[i].date }
-        : { goal: budgetGoals[goalIdx], reached: false, months: Infinity, date: null };
+        ? { goal: goals[goalIdx], reached: results[i].months === 0, months: results[i].months, date: results[i].date }
+        : { goal: goals[goalIdx], reached: false, months: Infinity, date: null };
     });
     return byGoalIndex;
   }
 
-  if (rate <= 0) return toGoalIndexArray();
+  // Nur dann nichts zu simulieren, wenn WEDER ein freier Pool NOCH
+  // irgendein Ziel eine eigene Reservierung hat — ein Ziel mit eigener
+  // Reservierung macht auch bei rate<=0 (z.B. "Garantiert" reicht sonst
+  // für nichts) weiterhin Fortschritt, siehe unten.
+  const hasOwnReserved = ownReserved.some(r => r > 0.005);
+  if (rate <= 0 && !hasOwnReserved) return toGoalIndexArray();
 
   const MAX_MONTHS = 1200; // Sicherheitsgrenze: 100 Jahre
   let month = 0;
   while (results.includes(null) && month < MAX_MONTHS) {
     month++;
+
+    // 1) Eigene Reservierung zuerst — steht unabhängig von Priorität und
+    //    freiem Pool ausschließlich GENAU diesem einen Ziel zu (siehe
+    //    Kommentar bei ownReserved oben).
+    for (let i = 0; i < n; i++) {
+      if (remaining[i] <= 0.005 || ownReserved[i] <= 0.005) continue;
+      const take = Math.min(ownReserved[i], remaining[i]);
+      remaining[i] = round2(remaining[i] - take);
+      if (remaining[i] <= 0.005 && results[i] === null) {
+        const d = new Date(now); d.setMonth(d.getMonth() + month);
+        results[i] = { months: month, date: d };
+      }
+    }
+
+    // 2) Danach der allgemeine freie Pool nach Priorität — wie bisher.
     let pool = rate;
     for (let i = 0; i < n && pool > 0.005; i++) {
       if (remaining[i] <= 0.005) continue; // dieses Ziel ist schon voll finanziert
@@ -313,7 +357,10 @@ function renderSparplanIncomeExpense() {
 function renderSparplanGoals(rates) {
   const el = document.getElementById('sparplan-goals');
   if (!el) return;
-  if (!budgetGoals.length) {
+  // Archivierte Sparziele gehören ins Archiv (siehe archiveGoal() in
+  // budget-sparziele.js), nicht mehr in die Prognose.
+  const activeGoals = sparplanerActiveGoals();
+  if (!activeGoals.length) {
     el.innerHTML = '<div class="empty-state">Noch keine Sparziele — leg oben eines an.</div>';
     return;
   }
@@ -324,7 +371,7 @@ function renderSparplanGoals(rates) {
     opt:    sparplanerETAs(rates.opt),
   };
 
-  const rows = budgetGoals.map((g, i) => {
+  const rows = activeGoals.map((g, i) => {
     const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
     const emoji = PLANT_EMOJIS[g.plantType] || '🌱';
     const gEta = etaByScenario.garant[i], rEta = etaByScenario.real[i], oEta = etaByScenario.opt[i];
@@ -365,7 +412,7 @@ function renderSparplanGoals(rates) {
         <div class="sp-goal-order">
           <button class="sp-order-btn" data-i="${i}" data-dir="-1" ${i===0?'disabled':''} title="Nach oben">▲</button>
           <span class="sp-goal-prio">${i + 1}</span>
-          <button class="sp-order-btn" data-i="${i}" data-dir="1" ${i===budgetGoals.length-1?'disabled':''} title="Nach unten">▼</button>
+          <button class="sp-order-btn" data-i="${i}" data-dir="1" ${i===activeGoals.length-1?'disabled':''} title="Nach unten">▼</button>
         </div>
         <div class="sp-goal-name">
           <div class="sp-goal-name-top">${emoji} ${g.name} ${priorityBadge(g.priority || 'need')} <span class="sp-goal-target">${fmtEuro(g.target)}</span></div>
@@ -392,8 +439,14 @@ function renderSparplanGoals(rates) {
       const i = parseInt(btn.dataset.i, 10);
       const dir = parseInt(btn.dataset.dir, 10);
       const j = i + dir;
-      if (j < 0 || j >= budgetGoals.length) return;
-      [budgetGoals[i], budgetGoals[j]] = [budgetGoals[j], budgetGoals[i]];
+      if (j < 0 || j >= activeGoals.length) return;
+      // Im ECHTEN budgetGoals-Array per ID (nicht per Index) tauschen —
+      // activeGoals ist nur eine gefilterte Sicht, dazwischen können
+      // archivierte Ziele liegen, deren Position dabei unangetastet bleibt.
+      const idxA = budgetGoals.findIndex(x => x.id === activeGoals[i].id);
+      const idxB = budgetGoals.findIndex(x => x.id === activeGoals[j].id);
+      if (idxA === -1 || idxB === -1) return;
+      [budgetGoals[idxA], budgetGoals[idxB]] = [budgetGoals[idxB], budgetGoals[idxA]];
       saveBudgetGoals();
       renderSparplaner();
     });
@@ -408,7 +461,7 @@ function renderSparplanTimeline(activeRate) {
   const scenarioLabel = sparplanerSimRate !== null ? 'Simulation' : SCENARIO_META[sparplanerScenario].label;
   if (titleEl) titleEl.innerHTML = `🧭 Zeitstrahl <span style="font-weight:400;color:var(--text-3)">— Szenario: ${scenarioLabel}</span>`;
 
-  if (!budgetGoals.length) {
+  if (!sparplanerActiveGoals().length) {
     el.innerHTML = '<div class="empty-state">Noch keine Sparziele vorhanden.</div>';
     return;
   }
@@ -426,19 +479,38 @@ function renderSparplanTimeline(activeRate) {
   const startDate = new Date(); startDate.setHours(0, 0, 0, 0);
   const endDate = etas[etas.length - 1].date;
   const totalMs = Math.max(1, endDate - startDate);
-  const totalDays = totalMs / MS_PER_DAY;
 
-  // Achsenbreite proportional zur Zeitspanne (mehr Zeit = mehr Platz),
-  // mit sinnvollen Grenzen für sehr kurze bzw. sehr lange Horizonte.
-  const trackWidth = Math.round(Math.min(2600, Math.max(680, totalDays * 2.6)));
+  // KORREKTUR (gemeldetes Problem): die Achsenbreite wurde vorher aus der
+  // Zeitspanne selbst berechnet (Tage × Faktor) — ein Ziel in 1–2 Jahren
+  // machte die Achse dadurch riesig breit, mit viel leerem Platz und
+  // horizontalem Scrollen, obwohl das Panel selbst viel schmaler ist.
+  // Jetzt umgekehrt: die komplette Zeitspanne wird IMMER auf die
+  // tatsächlich sichtbare Panel-Breite gestaucht — je länger die Spanne,
+  // desto enger die Jahres-/Monatsabstände zwischen den Zielen, aber nie
+  // breiter als der verfügbare Platz. Kein horizontales Scrollen mehr
+  // nötig (der Wrap behält overflow-x als Sicherheitsnetz für sehr
+  // schmale Viewports/viele dicht gedrängte Zeilen).
+  const WRAP_H_PADDING = 64; // .sp-timeline-wrap: 40px rechts + 24px links
   const CARD_W  = 116;              // an .sp-tl-card min-width in CSS gekoppelt
   const MIN_GAP = CARD_W + 18;      // Mindestabstand, bevor eine neue Zeile beginnt
   const ROW_H   = 108;              // vertikaler Abstand zwischen Zeilen
 
-  // X-Position (px) je Ziel — proportional zum tatsächlichen Datum
+  // axisWidth = komplette verfügbare Breite (füllt das Panel). Karten
+  // sind aber mittig auf ihre X-Position zentriert (translateX(-50%)) und
+  // damit CARD_W/2 breiter als ihr eigener Punkt — ohne Einrückung würde
+  // die äußerste Karte am rechten (und ggf. linken) Rand über die
+  // Panel-Breite hinausragen und genau das erneut nötig machen, was
+  // behoben werden soll: horizontales Scrollen. trackWidth ist deshalb
+  // die um eine halbe Kartenbreite auf JEDER Seite eingerückte Spanne, in
+  // der die Punkte tatsächlich verteilt werden.
+  const axisWidth = Math.max(320, (el.clientWidth || 680) - WRAP_H_PADDING);
+  const trackWidth = Math.max(120, axisWidth - CARD_W);
+
+  // X-Position (px) je Ziel — proportional zum tatsächlichen Datum,
+  // eingerückt um CARD_W/2 (siehe oben)
   const points = etas.map(e => ({
     e,
-    x: Math.round(((e.date - startDate) / totalMs) * trackWidth),
+    x: Math.round(CARD_W / 2 + ((e.date - startDate) / totalMs) * trackWidth),
   }));
 
   // Überlappungs-Schutz: Ziele, die zeitlich zu nah beieinander liegen,
@@ -453,12 +525,12 @@ function renderSparplanTimeline(activeRate) {
   });
   const maxRow = points.reduce((m, p) => Math.max(m, p.row), 0);
 
-  // Jahresmarkierungen entlang der Achse
+  // Jahresmarkierungen entlang der Achse (dieselbe Einrückung wie die Punkte)
   const years = [];
   for (let y = startDate.getFullYear(); y <= endDate.getFullYear(); y++) {
     const jan1 = new Date(y, 0, 1);
     const clamped = jan1 < startDate ? startDate : jan1;
-    years.push({ year: y, x: Math.round(((clamped - startDate) / totalMs) * trackWidth) });
+    years.push({ year: y, x: Math.round(CARD_W / 2 + ((clamped - startDate) / totalMs) * trackWidth) });
   }
 
   const axisHeight = 40 + (maxRow + 1) * ROW_H + 30;
@@ -485,8 +557,8 @@ function renderSparplanTimeline(activeRate) {
 
   el.innerHTML = `
     <div class="sp-timeline-wrap">
-      <div class="sp-timeline-axis" style="width:${trackWidth}px;height:${axisHeight}px;">
-        <div class="sp-tl-baseline" style="width:${trackWidth}px"></div>
+      <div class="sp-timeline-axis" style="width:${axisWidth}px;height:${axisHeight}px;">
+        <div class="sp-tl-baseline" style="width:${axisWidth}px"></div>
         ${yearHtml}
         ${pointHtml}
       </div>
@@ -502,7 +574,7 @@ function renderSparplanSimulator(rates) {
   const min = Math.min(0, Math.floor(baseRate - Math.abs(baseRate || 100)));
   const max = Math.ceil(Math.abs(baseRate || 100) * 2) + Math.abs(baseRate || 100);
 
-  const topGoal = budgetGoals[0];
+  const topGoal = sparplanerActiveGoals()[0];
   const simEtas = sparplanerETAs(current);
   const topEtaHtml = topGoal
     ? `<div class="sp-sim-hint">${PLANT_EMOJIS[topGoal.plantType] || '🌱'} ${topGoal.name} bei diesem Betrag: <b>${simEtas[0].reached ? 'bereits erreicht' : sparplanerFormatEtaDate(simEtas[0].date)}</b></div>`
@@ -539,9 +611,10 @@ function renderSparplanSimulatorHintOnly() {
   const valueEl = document.querySelector('#sparplan-simulator .sp-sim-value');
   const hintEl  = document.querySelector('#sparplan-simulator .sp-sim-hint');
   if (valueEl) valueEl.textContent = fmtEuro(sparplanerSimRate);
-  if (hintEl && budgetGoals[0]) {
+  const topGoal = sparplanerActiveGoals()[0];
+  if (hintEl && topGoal) {
     const e = sparplanerETAs(sparplanerSimRate)[0];
-    hintEl.innerHTML = `${PLANT_EMOJIS[budgetGoals[0].plantType] || '🌱'} ${budgetGoals[0].name} bei diesem Betrag: <b>${e.reached ? 'bereits erreicht' : sparplanerFormatEtaDate(e.date)}</b>`;
+    hintEl.innerHTML = `${PLANT_EMOJIS[topGoal.plantType] || '🌱'} ${topGoal.name} bei diesem Betrag: <b>${e.reached ? 'bereits erreicht' : sparplanerFormatEtaDate(e.date)}</b>`;
   }
 }
 
@@ -556,7 +629,7 @@ function renderSparplanSummary(rates) {
     bullets.push(`Davon sind ${fmtEuro(reservedTotal)} / Monat bereits für deine Sparpläne reserviert und in diesen Beträgen herausgerechnet.`);
   }
 
-  const topGoal = budgetGoals[0];
+  const topGoal = sparplanerActiveGoals()[0];
   if (topGoal) {
     const rEta = sparplanerETAs(rates.real)[0];
     if (rEta.reached) {

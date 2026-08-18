@@ -184,6 +184,16 @@ function incomeIcon(name){
   return '💶';
 }
 
+// Bevorzugt das im recurring-Modal explizit gewählte Icon (r.icon, nur
+// bei Einnahmen gesetzt) — fällt nur auf die Namens-Heuristik oben
+// zurück, wenn (noch) keins gewählt wurde (Einnahmen von vor diesem
+// Feature). So bleiben bestehende Daten nutzbar, ohne Migration.
+function resolveIncomeIcon(recurringId, name){
+  const entry = budgetRecurring.find(r => r.id === recurringId);
+  if (entry && entry.icon) return entry.icon;
+  return incomeIcon(name);
+}
+
 // ── Engine: Zuordnung je Einnahme, über ALLE Verbraucher hinweg ────
 // monthKey ist optional und wird ausschließlich für einmalige Ausgaben
 // ausgewertet (die gelten nur in ihrem eigenen Monat) — wiederkehrende
@@ -256,23 +266,39 @@ function financingWarningsForConsumer(funding, totalAmount){
 // Namen bewusst unverändert (sparplanTotalReserved/sparplanReservedForIncome),
 // da budget-sparprognose.js diese Funktionen bereits unter diesem Namen
 // aufruft (sparplanerReservedTotal() in budget-sparprognose.js).
+// Archivierte Sparziele/Schulden (siehe archiveGoal()/archiveDebt()) sind
+// erledigt — ihre alten Finanzierungsbeträge dürfen die "frei verfügbare"
+// Sparrate in der Sparprognose nicht mehr dauerhaft schmälern.
+//
+// Eigener monatlich reservierter Betrag EINES Sparziels — dieselbe Summe,
+// die auch in sparplanTotalReserved() (unten) einfließt. Wird zusätzlich
+// von sparplanerETAs() (budget-sparprognose.js) gebraucht: der reservierte
+// Betrag wird zwar korrekt vom allgemeinen freien Sparbetrag abgezogen,
+// muss aber GLEICHZEITIG als monatlicher Sparbeitrag für GENAU dieses Ziel
+// gezählt werden — sonst ist er faktisch doppelt weg (einmal abgezogen,
+// einmal bei der Zielprognose ignoriert), was die ETA fälschlich nach
+// hinten verschiebt (gemeldeter Berechnungsfehler).
+function goalOwnMonthlyReserved(goal){
+  if (!goal.reserveActive) return 0;
+  return round2((goal.funding || []).reduce((s, f) => s + f.amount, 0));
+}
 function sparplanTotalReserved(){
   const goalsTotal = budgetGoals
-    .filter(g => g.reserveActive)
+    .filter(g => g.reserveActive && !g.archived)
     .reduce((s, g) => s + (g.funding || []).reduce((s2, f) => s2 + f.amount, 0), 0);
   const debtsTotal = budgetDebts
-    .filter(d => d.reserveActive)
+    .filter(d => d.reserveActive && !d.archived)
     .reduce((s, d) => s + (d.funding || []).reduce((s2, f) => s2 + f.amount, 0), 0);
   return round2(goalsTotal + debtsTotal);
 }
 function sparplanReservedForIncome(recurringId){
   let total = 0;
   budgetGoals.forEach(g => {
-    if (!g.reserveActive) return;
+    if (!g.reserveActive || g.archived) return;
     (g.funding || []).forEach(f => { if (f.sourceId === recurringId) total += f.amount; });
   });
   budgetDebts.forEach(d => {
-    if (!d.reserveActive) return;
+    if (!d.reserveActive || d.archived) return;
     (d.funding || []).forEach(f => { if (f.sourceId === recurringId) total += f.amount; });
   });
   return round2(total);
