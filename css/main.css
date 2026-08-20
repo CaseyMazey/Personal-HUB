@@ -468,25 +468,20 @@ ul { list-style: none; }
        (bei ~670–900px Gesamtbreite genug Platz), nur weniger Padding.
        Tab-interne Grids reduzieren sich in den jeweiligen
        css/<tab>.css-Dateien selbst auf 2 statt 3 Spalten.
-     - Phone / Fold gefaltet (≤480px): Sidebar wird zum Off-Canvas-
-       Drawer (js/main.js: closeSidebarDrawer()/"sidebar-open"-Klasse
-       auf #app), geöffnet über den "Mehr"-Button der Bottom-Nav unten
-       (#bottom-nav-more-btn) statt eines eigenen Menü-Buttons — dort
-       bleiben alle Tabs jenseits der 4 Bottom-Nav-Favoriten sowie
-       Positivity-Widget, Countdowns und Wochen-Navigation unverändert
-       erreichbar.
+     - Phone / Fold gefaltet (≤480px): Sidebar wird komplett ausgeblendet.
+       Ihr Inhalt lebt stattdessen in #view-mehr (eigene Vollbild-View,
+       siehe index.html + js/main.js: placeSidebarWidgets()) — Nav-Punkte
+       dort sind eigene Markup-Kopien (wie bei der Bottom-Nav), Positivity/
+       Countdowns werden per JS zwischen #sidebar und #view-mehr
+       umgehängt statt dupliziert. Grund für den früheren Off-Canvas-
+       Drawer-Ansatz (verworfen): Nav-Liste + Positivity + Countdowns +
+       Footer zusammen sprengten auf kleinen Screens (z.B. iPhone SE)
+       die 100vh-Drawer-Höhe, overflow:hidden schnitt den Countdown-
+       Bereich dabei komplett unsichtbar ab.
    z-index bleibt bewusst unter 100 (.modal-backdrop), damit ein Modal
-   immer über Drawer und Bottom-Nav liegt, falls mehreres gleichzeitig
-   offen wäre.
+   immer über der Bottom-Nav liegt, falls mehreres gleichzeitig offen
+   wäre.
 ============================================================= */
-
-#sidebar-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(26,24,21,0.40);
-  z-index: 80;
-}
 
 /* Bottom-Nav: nur auf Phone-Breite sichtbar (siehe @media unten), aber
    Grundgerüst hier oben, damit sie nicht erst per !important auftaucht. */
@@ -510,18 +505,7 @@ ul { list-style: none; }
 @media (max-width: 480px) {
   #app { grid-template-columns: 1fr; }
 
-  #sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: var(--sidebar-w);
-    max-width: 84vw;
-    z-index: 85;
-    transform: translateX(-100%);
-    transition: transform 200ms ease;
-  }
-  #app.sidebar-open #sidebar { transform: translateX(0); }
-  #app.sidebar-open #sidebar-backdrop { display: block; }
+  #sidebar { display: none; }
 
   /* Unten Platz für die Bottom-Nav (56px Inhalt + Safe-Area) statt wie
      vorher oben Platz für den (jetzt entfernten) Menü-Button. */
@@ -562,6 +546,42 @@ ul { list-style: none; }
   .floating-update-banner { right: 12px; bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 12px); }
   #sw-update-banner { bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 76px); }
 }
+
+/* =============================================================
+   MEHR — mobile-only Vollbild-Seite (siehe index.html #view-mehr).
+   #mehr-positivity-slot/#mehr-countdown-slot bekommen
+   #sidebar-positivity/#sidebar-countdowns per JS umgehängt (siehe
+   js/main.js: placeSidebarWidgets()) — dieselben DOM-Knoten wie in
+   der Desktop-Sidebar, keine Duplikate, damit positivity.js/today.js
+   weiterhin nur einen Render-Ziel-Container pro Widget kennen müssen.
+============================================================= */
+#view-mehr .view-header { justify-content: flex-start; gap: 10px; }
+
+.mehr-section { margin-bottom: 18px; }
+.mehr-section-label { display: block; margin-bottom: 8px; padding-left: 2px; }
+
+.mehr-group.panel { display: flex; flex-direction: column; }
+.mehr-group .nav-btn { border-radius: 0; padding: 13px 16px; font-size: 14px; }
+.mehr-group .nav-btn + .nav-btn { border-top: 1px solid var(--border); }
+.mehr-group .nav-btn::after { content: '›'; margin-left: auto; opacity: .5; font-size: 17px; }
+
+#mehr-positivity-slot, #mehr-countdown-slot { padding: 14px 16px; }
+#mehr-positivity-slot #sidebar-positivity { padding: 0; }
+#mehr-countdown-slot #sidebar-countdowns { padding: 0; border-top: none; }
+
+.countdown-view-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.countdown-view-all-btn:hover { color: var(--text); }
 
 /* ── Dashboard container — unified across all views ──────── */
 /* Applied to the inner content wrapper in each view.        */

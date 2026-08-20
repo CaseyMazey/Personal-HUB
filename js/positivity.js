@@ -208,6 +208,10 @@ function renderPositivityWidget() {
   if (!wrap) return;
 
   const ref = positivityDaily.cardId ? findPositivityCard(positivityDaily.cardId) : null;
+  // Auf Mobile steckt wrap in #mehr-positivity-slot (siehe js/main.js:
+  // placeSidebarWidgets()), der sonst als leere, gepaddete Box sichtbar
+  // bliebe.
+  document.getElementById('mehr-positivity-slot')?.classList.toggle('hidden', !ref);
   if (!ref) { wrap.classList.add('hidden'); wrap.innerHTML = ''; return; }
   wrap.classList.remove('hidden');
 

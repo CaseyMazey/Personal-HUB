@@ -228,9 +228,15 @@ function updateCountdown() {
     .filter(c => countdownVisible[c.id] === true)
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
-  // Show/hide countdowns section
+  // Show/hide countdowns section — auf Mobile steckt section in
+  // #mehr-countdown-slot (siehe js/main.js: placeSidebarWidgets()),
+  // der sonst als leere, gepaddete Box sichtbar bliebe.
   const section = document.getElementById('sidebar-countdowns');
-  if (section) section.style.display = visible.length > 0 ? 'block' : 'none';
+  if (section) {
+    const hasCountdowns = visible.length > 0;
+    section.style.display = hasCountdowns ? 'block' : 'none';
+    document.getElementById('mehr-countdown-slot')?.classList.toggle('hidden', !hasCountdowns);
+  }
 
   visible.forEach(item => {
     const entry = document.createElement('div'); entry.className = 'countdown-entry';
