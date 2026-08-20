@@ -564,3 +564,28 @@
   background: none; color: var(--text-3); cursor: pointer; transition: all 120ms;
 }
 .toggle-select-btn.active { background: var(--sage,#5a9467); color: var(--sage-fg); border-color: var(--sage,#5a9467); }
+
+/* =============================================================
+   RESPONSIVE
+   #project-grid und .pdt-tiles-grid nutzen bereits auto-fill/minmax
+   und brauchen keine Breakpoints. Die Hero (28%/44%/28%-Spalten,
+   feste 420–480px Höhe) verträgt sich dagegen nicht mit schmaleren
+   Breiten — die stapeln wir stattdessen.
+============================================================= */
+@media (max-width: 1024px) {
+  .pdt-hero { grid-template-columns: 1fr; min-height: 0; max-height: none; }
+  .pdt-left { padding: 22px 24px 8px; }
+  .pdt-project-name { font-size: 38px; }
+  .pdt-tree-col { min-height: 260px; padding-top: 0; }
+  .pdt-info-card { margin: 0 24px 22px; max-width: none; width: auto; }
+}
+
+@media (max-width: 480px) {
+  .pdt-hero { border-radius: var(--radius-lg); }
+  .pdt-left { padding: 18px 16px 6px; }
+  .pdt-project-name { font-size: 28px; }
+  .pdt-project-desc { max-width: none; }
+  .pdt-info-card { margin: 0 16px 18px; }
+  .pdt-tasks-section { padding: 20px 16px 32px; }
+  .pdt-tasks-header { flex-wrap: wrap; gap: 10px; }
+}

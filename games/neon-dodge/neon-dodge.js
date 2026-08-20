@@ -13,10 +13,13 @@
   const LOGICAL_W = 960;
   const LOGICAL_H = 540;
 
-  // Ab diesem Score dürfen Hunter (die verfolgenden Gegner) erstmals
-  // spawnen — siehe spawnHazard(). Vorher soll sich der Spieler erst an
-  // Steuerung und normale Gegner gewöhnen können.
-  const HUNTER_UNLOCK_SCORE = 100;
+  // Ab dieser Spielzeit (Sekunden, siehe `t` — läuft unabhängig vom Score
+  // mit) dürfen Hunter (die verfolgenden Gegner) erstmals spawnen — siehe
+  // spawnHazard(). Vorher soll sich der Spieler erst an Steuerung und
+  // normale Gegner gewöhnen können. Bewusst zeit- statt punktebasiert,
+  // damit die Freischaltung nicht davon abhängt, wie gut/schlecht gerade
+  // gepunktet wird.
+  const HUNTER_UNLOCK_TIME = 45;
 
   /* =========================================================
      PLUGIN-ZUSTAND
@@ -417,9 +420,9 @@
      ========================================================= */
   function spawnHazard() {
 
-    // Hunter erst ab HUNTER_UNLOCK_SCORE — vorher soll sich der Spieler
-    // erst an Steuerung und normale Gegner gewöhnen können.
-    const isHunter = score >= HUNTER_UNLOCK_SCORE && Math.random() < 0.22;
+    // Hunter erst ab HUNTER_UNLOCK_TIME Sekunden Spielzeit — vorher soll
+    // sich der Spieler erst an Steuerung und normale Gegner gewöhnen können.
+    const isHunter = t >= HUNTER_UNLOCK_TIME && Math.random() < 0.22;
 
     const side = Math.random() < 0.5 ? "right" : "top";
 

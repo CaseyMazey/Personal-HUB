@@ -86,3 +86,16 @@
   transition: all var(--transition);
 }
 
+/* =============================================================
+   RESPONSIVE
+============================================================= */
+@media (max-width: 1024px) {
+  #settings-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .block-settings-row { flex-wrap: wrap; }
+  .bs-label { min-width: 100px; }
+  .settings-row { flex-wrap: wrap; }
+}
+

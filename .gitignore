@@ -1,0 +1,16 @@
+# Lokale Tooling-Artefakte (Cloudflare Wrangler, npm/npx-Zwischenstand)
+.wrangler/
+node_modules/
+
+# Android-Signing-Keystore (Phase 4, Bubblewrap) — enthält das einzige
+# Zertifikat, mit dem sich die Play-Store-App je aktualisieren lässt.
+# Gehört niemals ins Repo, wird separat gesichert.
+*.keystore
+*.jks
+
+# Persönliche Sync-Zugangsdaten (Supabase URL/Key) — jeder Fork trägt
+# hier seine eigenen ein, siehe js/sync-config.example.js.
+js/sync-config.js
+
+# Persönliche Referenzdatei (nicht Teil der App)
+Müll-Wasser.xlsx

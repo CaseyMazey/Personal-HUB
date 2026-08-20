@@ -461,6 +461,108 @@ ul { list-style: none; }
 }
 .view.active { display: block; }
 
+/* =============================================================
+   RESPONSIVE — Grundgerüst
+   Zwei Stufen unterhalb des unveränderten Desktop-Layouts:
+     - Tablet / Fold aufgeklappt (≤1024px): Sidebar bleibt sichtbar
+       (bei ~670–900px Gesamtbreite genug Platz), nur weniger Padding.
+       Tab-interne Grids reduzieren sich in den jeweiligen
+       css/<tab>.css-Dateien selbst auf 2 statt 3 Spalten.
+     - Phone / Fold gefaltet (≤480px): Sidebar wird zum Off-Canvas-
+       Drawer (js/main.js: closeSidebarDrawer()/"sidebar-open"-Klasse
+       auf #app), geöffnet über den "Mehr"-Button der Bottom-Nav unten
+       (#bottom-nav-more-btn) statt eines eigenen Menü-Buttons — dort
+       bleiben alle Tabs jenseits der 4 Bottom-Nav-Favoriten sowie
+       Positivity-Widget, Countdowns und Wochen-Navigation unverändert
+       erreichbar.
+   z-index bleibt bewusst unter 100 (.modal-backdrop), damit ein Modal
+   immer über Drawer und Bottom-Nav liegt, falls mehreres gleichzeitig
+   offen wäre.
+============================================================= */
+
+#sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26,24,21,0.40);
+  z-index: 80;
+}
+
+/* Bottom-Nav: nur auf Phone-Breite sichtbar (siehe @media unten), aber
+   Grundgerüst hier oben, damit sie nicht erst per !important auftaucht. */
+#mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 90;
+  background: var(--surface);
+  border-top: 1px solid var(--border-strong);
+  box-shadow: 0 -2px 10px rgba(50,40,20,0.06);
+  /* env() für's Home-Indicator-Gebiet auf iPhones ohne Home-Button —
+     0px Fallback auf allen anderen Geräten. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 1024px) {
+  .view { padding: 20px 20px 16px; }
+}
+
+@media (max-width: 480px) {
+  #app { grid-template-columns: 1fr; }
+
+  #sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-w);
+    max-width: 84vw;
+    z-index: 85;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+  }
+  #app.sidebar-open #sidebar { transform: translateX(0); }
+  #app.sidebar-open #sidebar-backdrop { display: block; }
+
+  /* Unten Platz für die Bottom-Nav (56px Inhalt + Safe-Area) statt wie
+     vorher oben Platz für den (jetzt entfernten) Menü-Button. */
+  .view { padding: 20px 16px calc(56px + env(safe-area-inset-bottom, 0px) + 16px); }
+
+  #mobile-bottom-nav { display: flex; }
+  #mobile-bottom-nav .nav-btn,
+  #mobile-bottom-nav #bottom-nav-more-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 56px;
+    padding: 0;
+    border-radius: 0;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-2);
+    text-align: center;
+  }
+  #mobile-bottom-nav .nav-btn svg,
+  #mobile-bottom-nav #bottom-nav-more-btn svg { opacity: 0.55; }
+  #mobile-bottom-nav .nav-btn:hover,
+  #mobile-bottom-nav #bottom-nav-more-btn:hover { background: none; }
+  #mobile-bottom-nav .nav-btn.active,
+  #mobile-bottom-nav #bottom-nav-more-btn.active {
+    background: none;
+    box-shadow: none;
+    color: var(--sage-dark);
+    font-weight: 600;
+  }
+  #mobile-bottom-nav .nav-btn.active svg,
+  #mobile-bottom-nav #bottom-nav-more-btn.active svg { opacity: 1; color: var(--sage-dark); }
+
+  /* Update-Pillen (sync.js/pwa.js) über statt hinter der Bottom-Nav. */
+  .floating-update-banner { right: 12px; bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 12px); }
+  #sw-update-banner { bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 76px); }
+}
+
 /* ── Dashboard container — unified across all views ──────── */
 /* Applied to the inner content wrapper in each view.        */
 /* Identical to today's #today-main visual appearance.       */
@@ -522,6 +624,59 @@ ul { list-style: none; }
   transition: background var(--transition), color var(--transition), border-color var(--transition);
 }
 .btn-ghost:hover { background: var(--accent-soft); color: var(--text); border-color: var(--border-strong); }
+
+/* Warnende Variante von .btn-primary für hubConfirm({ danger: true })
+   (hub-utils.js) — nutzt dieselbe --prio-1-Warnfarbe wie die übrigen
+   Lösch-/Zurücksetzen-Buttons im Hub (z.B. Karte/Projekt löschen, "Alle
+   Spieldaten zurücksetzen"), statt eine eigene Rot-Variante zu erfinden. */
+.btn-primary.hub-confirm-danger {
+  background: var(--prio-1);
+}
+.btn-primary.hub-confirm-danger:hover {
+  background: var(--prio-1);
+  filter: brightness(0.92);
+}
+
+/* hubConfirm() (hub-utils.js) kann über einem bereits offenen Modal
+   erscheinen (z.B. Games-Stats-Modal) — höherer z-index als der normale
+   .modal-backdrop-Wert (100), damit es garantiert obenauf liegt. */
+#hub-confirm-overlay { z-index: 200; }
+
+/* Schwebende Pille unten rechts für Update-Hinweise (Sync-Update, App-
+   Update), statt Modal/Overlay, damit sie die aktuelle Ansicht nie
+   blockiert. Gemeinsame Basis, geteilt von js/sync.js (#sync-update-banner)
+   und js/pwa.js (#sw-update-banner) — beide stapeln sich bei Bedarf
+   übereinander statt sich zu überlappen (siehe Bottom-Offsets unten). */
+.floating-update-banner {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+  color: var(--text-2);
+  animation: modalIn 160ms ease;
+}
+.floating-update-banner button {
+  background: var(--sage);
+  color: var(--sage-fg);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.floating-update-banner button:hover { background: var(--sage-dark); }
+/* App-Update-Banner sitzt über dem Sync-Banner, falls je beide gleichzeitig sichtbar sind. */
+#sw-update-banner { bottom: 88px; }
 
 .icon-btn {
   width: 28px;

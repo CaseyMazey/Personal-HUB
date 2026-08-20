@@ -212,14 +212,35 @@ document.getElementById('backup-file-input').addEventListener('change', e => {
   e.target.value = '';
 });
 
+// Umfassender Reset über ALLE Spiele hinweg (inkl. Cozy Home, siehe
+// resetStats() in games/cozy-home/manifest.js) — deshalb zwei
+// Sicherheitsabfragen statt nur einer, im Gegensatz zum Zurücksetzen
+// eines einzelnen Spiels (games.js: games-stats-modal-reset), das ohne
+// zweite Nachfrage auskommt, weil dort klar ist, welches eine Spiel
+// betroffen ist.
 document.getElementById('reset-highscores-btn').addEventListener('click', async () => {
-  if (!confirm('Alle Highscores zurücksetzen?')) return;
+  const step1 = await hubConfirm({
+    title: 'Alle Spieldaten zurücksetzen',
+    message: 'Möchtest du wirklich alle Spieldaten zurücksetzen?',
+    confirmText: 'Weiter',
+    danger: true,
+  });
+  if (!step1) return;
+
+  const step2 = await hubConfirm({
+    title: 'Wirklich alles löschen?',
+    message: 'Das löscht ausnahmslos ALLE Spielstatistiken UND alle Cozy-Home-Daten (Haustiere, Münzen, Inventar). Dieser Vorgang kann NICHT rückgängig gemacht werden.',
+    confirmText: 'Endgültig zurücksetzen',
+    danger: true,
+  });
+  if (!step2) return;
+
   // settings.js kennt keine einzelnen Spiele — der Hub fragt alle
   // registrierten Spiele durch und ruft deren resetStats() auf, falls vorhanden.
   if (window.GameHub && typeof window.GameHub.resetAllStats === 'function') {
     await window.GameHub.resetAllStats();
   }
-  alert('Highscores wurden zurückgesetzt.');
+  alert('Alle Spieldaten wurden zurückgesetzt.');
 });
 
 

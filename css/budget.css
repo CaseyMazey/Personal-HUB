@@ -1125,6 +1125,7 @@
 .gf-week-title { font-size: 12px; font-weight: 700; color: var(--text); }
 .gf-week-total { font-family: var(--mono); font-size: 12px; font-weight: 700; }
 @media (max-width: 760px) { .gf-week-grid { grid-template-columns: repeat(2, 1fr); } .gf-week-col + .gf-week-col { border-left: none; border-top: 1px dashed var(--border); } }
+@media (max-width: 480px) { .gf-week-grid { grid-template-columns: 1fr; } }
 
 .gf-bar-wrap { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .gf-income-bar {
@@ -1625,4 +1626,58 @@
 .sp-savedby-formula-op { color: var(--text-3); }
 .sp-savedby-formula-result { font-weight: 700; color: var(--sage-dark); }
 .sp-savedby-formula + .sp-savedby-formula { border-top: 1px dashed var(--border); margin-top: 2px; padding-top: 8px; }
+
+/* =============================================================
+   RESPONSIVE
+   Budget ist der dichteste Tab im Hub (Header mit 5-teiligem Subtab-
+   Umschalter + Monatspicker, 3 gleich breite Summary-Karten, 2x2
+   Liquidität/Finanzgarten, 3 ungleich breite Listenkarten) — entsprechend
+   mehr Stufen als bei den anderen Tabs.
+============================================================= */
+
+/* Subtab-Umschalter (Übersicht/Finanzierung/Prognose/Sparpläne/Schulden):
+   5 Pills in einer Reihe passen auf keinem Phone nebeneinander. Statt
+   umzubrechen (zerstört die Pillen-Optik) wird die Leiste horizontal
+   scrollbar — gilt unabhängig von der Breite, nicht nur ≤480px, da schon
+   Tablet-Breiten knapp werden können. */
+.sp-subtab-switch {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.sp-subtab-switch::-webkit-scrollbar { height: 4px; }
+.sp-subtab-switch::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+.sp-subtab-btn { flex-shrink: 0; white-space: nowrap; }
+
+@media (max-width: 1080px) {
+  /* Header: 1fr-auto-1fr-Grid samt fest 240px breitem Monatspicker in
+     der rechten Spalte passt ab hier nicht mehr nebeneinander. */
+  #budget-header { grid-template-columns: 1fr; gap: 14px; }
+  .b-ks-header-pill { justify-self: flex-start; }
+  #budget-actions { justify-self: stretch; flex-wrap: wrap; padding-top: 0; }
+
+  /* 3 gleich breite Summary-Karten -> 2, dritte rutscht in eigene Zeile */
+  #budget-main-cards { grid-template-columns: repeat(2, 1fr); }
+
+  /* Wiederkehrend/Einmalig/Sparziele: 3 ungleiche Spalten -> 2 */
+  #budget-row3 { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 900px) {
+  /* Liquiditätsvorschau + Finanzgarten nebeneinander wird auf Tablet-Breite eng */
+  #budget-mid-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  #budget-main-cards { grid-template-columns: 1fr; }
+  #budget-row3 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  #budget-title-block h1 { font-size: 28px; }
+  #budget-month-picker { width: 100%; }
+  #budget-actions { gap: 8px; }
+  .b-tip-left { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 18px; }
+}
 

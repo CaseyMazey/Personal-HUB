@@ -617,9 +617,15 @@ wireGamePlayModal();
 // in manifest.js, nicht in <id>.js.
 // =========================
 
+// ID des Spiels, dessen Stats-Modal gerade offen ist — der einzige State,
+// den der "Zurücksetzen"-Button unten braucht, um zu wissen, WELCHES
+// resetStats() er aufrufen soll (der Hub kennt sonst keine einzelne ID).
+let statsModalGameId = null;
+
 function openGameStatsModal(gameId) {
   const game = window.GameHub.registry[gameId];
   if (!game) return;
+  statsModalGameId = gameId;
 
   document.getElementById('games-stats-modal-icon').textContent = game.icon || '📊';
   document.getElementById('games-stats-modal-name').textContent = game.title;
@@ -647,11 +653,41 @@ function openGameStatsModal(gameId) {
     }
   }
 
+  // Jedes Spiel setzt sein eigenes resetStats() zurück — nie das eines
+  // anderen. Ein Spiel kann per resetLabel einen abweichenden Button-Text
+  // vorgeben (z.B. Cozy Home: "Cozy Home zurücksetzen" statt
+  // "Statistiken zurücksetzen", weil dort keine reinen Highscores, sondern
+  // Haustiere/Münzen/Inventar gelöscht werden).
+  const resetBtn = document.getElementById('games-stats-modal-reset');
+  if (resetBtn) {
+    const canReset = typeof game.resetStats === 'function';
+    resetBtn.classList.toggle('hidden', !canReset);
+    if (canReset) resetBtn.textContent = game.resetLabel || 'Statistiken zurücksetzen';
+  }
+
   document.getElementById('games-stats-modal-overlay').classList.remove('hidden');
 }
 
 function closeGameStatsModal() {
   document.getElementById('games-stats-modal-overlay').classList.add('hidden');
+  statsModalGameId = null;
+}
+
+async function handleGameStatsReset() {
+  const game = statsModalGameId ? window.GameHub.registry[statsModalGameId] : null;
+  if (!game || typeof game.resetStats !== 'function') return;
+  const confirmed = await hubConfirm({
+    title: game.resetLabel || 'Statistiken zurücksetzen',
+    message: game.resetConfirmText || `Statistiken von "${game.title}" wirklich zurücksetzen? Das kann nicht rückgängig gemacht werden.`,
+    confirmText: 'Zurücksetzen',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try { game.resetStats(); } catch (err) { console.error(err); }
+  renderLibraryGrid();
+  // Modal offen lassen und sofort neu befüllen — bestätigt sichtbar, dass
+  // ausschließlich DIESES Spiel jetzt bei null steht.
+  openGameStatsModal(statsModalGameId);
 }
 
 function wireGameStatsModal() {
@@ -659,6 +695,7 @@ function wireGameStatsModal() {
   if (!overlay) return;
 
   document.getElementById('games-stats-modal-close').addEventListener('click', closeGameStatsModal);
+  document.getElementById('games-stats-modal-reset')?.addEventListener('click', handleGameStatsReset);
   overlay.addEventListener('click', e => { if (e.target === overlay) closeGameStatsModal(); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !overlay.classList.contains('hidden')) closeGameStatsModal();

@@ -1,0 +1,30 @@
+# Cloudflare Pages — HTTP-Cache-Header
+#
+# Nook hat keinen Build-Step und damit keine content-gehashten
+# Dateinamen (z.B. main.abc123.js) — der Browser kann eine geänderte
+# js/css-Datei also nicht allein am Dateinamen als "neu" erkennen.
+# Deshalb "no-cache" (nicht "no-store"!) für alles Code-Relevante:
+# der Browser darf die Datei weiterhin cachen, muss aber bei jedem
+# Abruf beim Server nachfragen, ob sie sich geändert hat (schnelle
+# 304-Antwort, wenn nicht). Verhindert genau das Problem von heute
+# (Service Worker + Browser-Cache lieferten stundenlang eine veraltete
+# js-Datei aus, ohne dass ein Fix ankam).
+#
+# sw.js ist der kritischste Fall: liefert der Browser hier eine
+# veraltete Kopie aus, erkennt er ein neues Service-Worker-Update
+# gar nicht erst.
+
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache
+
+/*.js
+  Cache-Control: no-cache
+
+/*.css
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache

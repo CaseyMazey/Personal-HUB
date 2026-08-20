@@ -370,3 +370,23 @@
 /* Block-Ansicht — Status-Icon-Präfix vor dem Titel, zusätzlich zur
    bestehenden .block-task-done-Regel (index.html) für "abgeschlossen". */
 .block-tasks li.block-task-status-in_progress { color: var(--amber); }
+
+/* =============================================================
+   RESPONSIVE
+   ≤1024px: rechte Spalte (Uhr/Quicknote/Mini-Kalender/National-Day)
+   passt bei 314px fixer Breite + App-Sidebar nicht mehr komfortabel
+   neben den Hauptbereich — wird unter #today-main gestapelt.
+============================================================= */
+@media (max-width: 1024px) {
+  #today-layout { grid-template-columns: 1fr; }
+  #today-right { position: static; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  #today-main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .today-weather { width: 100%; box-sizing: border-box; }
+
+  .gd-row { flex-direction: column; }
+  .gd-col { padding: 10px 0 !important; }
+  .gd-col + .gd-col { border-left: none; border-top: 1px solid var(--border); }
+}

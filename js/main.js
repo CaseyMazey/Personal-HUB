@@ -342,16 +342,44 @@ const viewMap={};
 document.querySelectorAll('.view').forEach(v=>{ viewMap[v.id.replace('view-','')]=v; });
 let currentView='today';
 
+// Tabs, die in der Mobile-Bottom-Nav einen eigenen Button haben (siehe
+// index.html #mobile-bottom-nav) — alle anderen Views gelten dort als
+// "im Mehr-Menü", der Mehr-Button bekommt dann statt eines der 4 Buttons
+// den Aktiv-Zustand.
+const BOTTOM_NAV_VIEWS = ['today', 'calendar', 'budget', 'games'];
+
 function showView(name) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   const view=viewMap[name]; if(view) view.classList.add('active');
-  const btn=document.querySelector(`.nav-btn[data-view="${name}"]`); if(btn) btn.classList.add('active');
+  // querySelectorAll statt querySelector: derselbe data-view-Button existiert
+  // doppelt (Sidebar + Bottom-Nav), beide sollen aktiv markiert werden.
+  document.querySelectorAll(`.nav-btn[data-view="${name}"]`).forEach(b=>b.classList.add('active'));
+  document.getElementById('bottom-nav-more-btn')?.classList.toggle('active', !BOTTOM_NAV_VIEWS.includes(name));
   currentView=name; renderView(name);
+  closeSidebarDrawer();
 }
 document.querySelectorAll('.nav-btn').forEach(btn=>{
   btn.addEventListener('click',()=>showView(btn.dataset.view));
 });
+
+// ── Mobile Sidebar-Drawer (≤480px, siehe css/main.css) ──────────────
+// #app bekommt die Klasse "sidebar-open" — main.css wertet sie nur
+// unterhalb des Phone-Breakpoints überhaupt aus (Off-Canvas-Sidebar);
+// bei größeren Breiten ist die Sidebar ohnehin fest sichtbar, die
+// Klasse hat dort keine Wirkung. Geöffnet wird sie über den "Mehr"-
+// Button der Bottom-Nav (#bottom-nav-more-btn) — closeSidebarDrawer()
+// wird zusätzlich aus showView() aufgerufen, damit ein Tab-Wechsel die
+// Drawer immer automatisch schließt (normales Mobile-Verhalten).
+function closeSidebarDrawer() {
+  document.getElementById('app')?.classList.remove('sidebar-open');
+  document.getElementById('bottom-nav-more-btn')?.setAttribute('aria-expanded', 'false');
+}
+document.getElementById('bottom-nav-more-btn')?.addEventListener('click', () => {
+  const isOpen = document.getElementById('app')?.classList.toggle('sidebar-open');
+  document.getElementById('bottom-nav-more-btn').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
+document.getElementById('sidebar-backdrop')?.addEventListener('click', closeSidebarDrawer);
 
 function renderView(name) {
   if(name==='today')     { renderBlocks(); renderTasks(); refreshTodayTextareas(); renderGruppendienste(); }

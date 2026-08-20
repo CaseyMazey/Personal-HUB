@@ -143,3 +143,21 @@
 
 /* Filter-Reihe */
 #fc-filter-btn { display: flex; align-items: center; gap: 5px; }
+
+/* =============================================================
+   RESPONSIVE
+============================================================= */
+@media (max-width: 1024px) {
+  #flashcard-layout { grid-template-columns: 200px 1fr; }
+  #flashcard-layout.session-open { grid-template-columns: 200px 1fr; }
+  #fc-session-panel { grid-column: 1 / -1; position: static; max-height: none; }
+}
+
+@media (max-width: 480px) {
+  #fc-global-stats { grid-template-columns: repeat(2,1fr); }
+  #flashcard-layout,
+  #flashcard-layout.session-open { grid-template-columns: 1fr; }
+  #fc-session-panel { grid-column: auto; }
+  .fc-row { grid-template-columns: 1fr auto; row-gap: 4px; }
+  .fc-back { grid-column: 1; }
+}

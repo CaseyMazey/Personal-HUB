@@ -6,6 +6,8 @@
 // Enthält:
 //   1) Farbsystem  — Palette, speicherbare Nutzerfarben, Picker-Widget
 //   2) Codeblock-Renderer — wiederverwendbare ```code```-Darstellung
+//   3) Modal-Helper (wireModal) — gemeinsame Interaktions-Mechanik
+//   4) Bestätigungs-Modal (hubConfirm) — Nook-gestyltes confirm()-Pendant
 // =========================
 
 // =========================
@@ -404,4 +406,62 @@ function wireModal(overlayId, opts = {}) {
   }
 
   return { open, close };
+}
+
+// =========================
+// 4) BESTÄTIGUNGS-MODAL
+// Ersetzt native confirm()-Dialoge durch ein Nook-gestyltes Modal (Markup:
+// #hub-confirm-overlay in index.html), damit Sicherheitsabfragen sich in
+// die App einfügen statt als Browser-Popup herauszufallen. Promise-basiert,
+// damit sich ein Aufrufer wie bei confirm() per await eine einzige
+// Ja/Nein-Antwort holen kann — nur asynchron statt blockierend. Nur EIN
+// Bestätigungs-Modal gleichzeitig aktiv (wie bei window.confirm auch).
+// =========================
+
+let hubConfirmResolve = null;
+
+const hubConfirmModalCtl = wireModal('hub-confirm-overlay', {
+  closeIds: ['hub-confirm-close', 'hub-confirm-cancel'],
+  // Feuert bei JEDEM Schließen (X/Abbrechen/Backdrop/Escape) — der OK-Klick
+  // räumt hubConfirmResolve vorher selbst ab (siehe unten), daher landet
+  // hier nur noch der "abgebrochen"-Fall.
+  onClose: () => {
+    if (hubConfirmResolve) { hubConfirmResolve(false); hubConfirmResolve = null; }
+  },
+});
+
+document.getElementById('hub-confirm-ok')?.addEventListener('click', () => {
+  const resolve = hubConfirmResolve;
+  hubConfirmResolve = null; // vor close(), damit dessen onClose nicht nochmal (fälschlich mit false) auflöst
+  hubConfirmModalCtl.close();
+  if (resolve) resolve(true);
+});
+
+document.addEventListener('keydown', e => {
+  const overlay = document.getElementById('hub-confirm-overlay');
+  if (e.key === 'Escape' && overlay && !overlay.classList.contains('hidden')) hubConfirmModalCtl.close();
+});
+
+/**
+ * Nook-gestyltes Pendant zu window.confirm() — für Sicherheitsabfragen, die
+ * sich wie ein Teil der App anfühlen sollen statt wie ein Browser-Popup.
+ * @param {object} opts
+ *   title       {string}  Kopfzeile (Default: "Bist du sicher?")
+ *   message     {string}  Fließtext
+ *   confirmText {string}  Beschriftung des Bestätigen-Buttons (Default: "Bestätigen")
+ *   cancelText  {string}  Beschriftung des Abbrechen-Buttons (Default: "Abbrechen")
+ *   danger      {boolean} warnende (terrakotta) statt neutrale Bestätigen-Farbe
+ * @returns {Promise<boolean>} true = bestätigt, false = abgebrochen/geschlossen
+ */
+function hubConfirm(opts = {}) {
+  return new Promise(resolve => {
+    hubConfirmResolve = resolve;
+    document.getElementById('hub-confirm-title').textContent = opts.title || 'Bist du sicher?';
+    document.getElementById('hub-confirm-message').textContent = opts.message || '';
+    const okBtn = document.getElementById('hub-confirm-ok');
+    okBtn.textContent = opts.confirmText || 'Bestätigen';
+    okBtn.className = 'btn-primary' + (opts.danger ? ' hub-confirm-danger' : '');
+    document.getElementById('hub-confirm-cancel').textContent = opts.cancelText || 'Abbrechen';
+    hubConfirmModalCtl.open();
+  });
 }

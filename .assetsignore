@@ -1,0 +1,27 @@
+# Steuert, was tatsächlich deployed wird — unabhängig von .gitignore
+# (Wrangler liest .gitignore nicht automatisch). Alles hier Gelistete ist
+# interne Projekt-/Planungsdoku oder Tooling, kein Teil der eigentlichen App.
+#
+# WICHTIG: "wrangler pages deploy" (das Kommando, das dieses Projekt nutzt)
+# liest diese Datei NICHT selbst — das ist nur für den neueren
+# Workers-Assets-Deploy-Pfad ("wrangler deploy") eingebaut. Deployt wird
+# deshalb über scripts/deploy.ps1, das diese Datei per Hand auswertet und
+# eine gefilterte Staging-Kopie deployt. Direktes "wrangler pages deploy ."
+# ignoriert alles hier und lädt auch die folgenden Einträge live hoch.
+
+.git/
+.claude/
+.wrangler/
+scripts/
+AI documentation/
+mockups/
+
+# Gimp-Bearbeitungsquelle (.xcf), nicht das eigentliche Laufzeit-Asset
+# (das PNG liegt daneben) — 32 MB, über Cloudflare Pages' 25-MB-Limit
+# pro Datei und im Spiel selbst nirgends referenziert.
+games/cozy-home/assets/Gimp/
+node_modules/
+*.docx
+README.md
+CLAUDE.md
+Müll-Wasser.xlsx

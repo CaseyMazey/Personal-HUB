@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Schul-Hub</title>
+  <title>Nook</title>
   <link rel="icon" type="image/svg+xml" href="assets/nook_icon.svg" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6B7F58" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -383,7 +385,41 @@
 <body>
  
   <div id="app">
- 
+
+    <div id="sidebar-backdrop"></div>
+
+    <!-- Mobile-Bottom-Nav (nur ≤480px sichtbar, siehe main.css) — schnelle,
+         App-artige Navigation für die 4 meistgenutzten Tabs. Nutzt bewusst
+         dieselbe .nav-btn-Klasse + data-view wie die Sidebar-Buttons, damit
+         showView() (main.js) Aktiv-Status und Klick-Handling für beide
+         Stellen automatisch mit übernimmt, ohne eigenen Code.
+         "Mehr" öffnet stattdessen den bestehenden Sidebar-Drawer (ersetzt
+         den früheren eigenen Menü-Button) — dort bleiben alle restlichen
+         Tabs sowie Positivity-Widget, Countdowns und Wochen-Navigation
+         unverändert erreichbar, nichts davon musste für Mobile umziehen. -->
+    <nav id="mobile-bottom-nav">
+      <button class="nav-btn" data-view="today">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1.5" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1.5" fill="currentColor" opacity=".4"/><rect x="2" y="9" width="5" height="5" rx="1.5" fill="currentColor" opacity=".4"/><rect x="9" y="9" width="5" height="5" rx="1.5" fill="currentColor" opacity=".4"/></svg>
+        <span>Heute</span>
+      </button>
+      <button class="nav-btn" data-view="calendar">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".6"/><path d="M5 2v2M11 2v2M2 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Kalender</span>
+      </button>
+      <button class="nav-btn" data-view="budget">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".6"/><path d="M8 5v6M6 6.5h3a1 1 0 0 1 0 2H7a1 1 0 0 0 0 2h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>Budget</span>
+      </button>
+      <button class="nav-btn" data-view="games">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="2" stroke="currentColor" stroke-width="1.5" fill="none" opacity=".6"/><path d="M6 8H4M5 7v2M10 8h2M11 7l1 1-1 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span>Spiele</span>
+      </button>
+      <button id="bottom-nav-more-btn" aria-label="Mehr" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Mehr</span>
+      </button>
+    </nav>
+
     <!-- Sidebar -->
     <nav id="sidebar">
       <div id="sidebar-header">
@@ -1294,6 +1330,10 @@
             <div class="panel settings-panel">
               <div class="panel-header"><span class="panel-label">Daten &amp; Backup</span></div>
               <div class="settings-row">
+                <div><div class="settings-row-title">Geräte-Sync</div><div class="settings-row-sub" id="sync-status-sub">Nicht angemeldet — Daten bleiben nur auf diesem Gerät</div></div>
+                <button class="btn-ghost" id="sync-status-btn" style="font-size:13px;">Anmelden</button>
+              </div>
+              <div class="settings-row">
                 <div><div class="settings-row-title">Backup exportieren</div><div class="settings-row-sub">Alle Daten als JSON-Datei herunterladen</div></div>
                 <button class="btn-ghost" id="backup-export-btn" style="font-size:13px;">Exportieren</button>
               </div>
@@ -1303,8 +1343,8 @@
                 <input type="file" id="backup-file-input" accept=".json" style="display:none;"/>
               </div>
               <div class="settings-row">
-                <div><div class="settings-row-title">Highscores zurücksetzen</div><div class="settings-row-sub">Löscht alle Spielstände</div></div>
-                <button class="btn-ghost" id="reset-highscores-btn" style="font-size:13px;color:var(--prio-1);border-color:var(--prio-1);">Zurücksetzen</button>
+                <div><div class="settings-row-title">Alle Spieldaten zurücksetzen</div><div class="settings-row-sub">Löscht ausnahmslos alle Spielstatistiken UND alle Cozy-Home-Daten (Haustiere, Münzen, Inventar) — für einzelne Spiele gibt es eigene Zurücksetzen-Buttons in deren Statistik-Ansicht.</div></div>
+                <button class="btn-ghost" id="reset-highscores-btn" style="font-size:13px;color:var(--prio-1);border-color:var(--prio-1);">Alles zurücksetzen</button>
               </div>
             </div>
  
@@ -2486,6 +2526,71 @@
     </div>
   </div>
 
+  <!-- Sync-Login-Modal (js/sync.js) — Geräte-übergreifender Datenabgleich
+       per Supabase Magic Link. "Später"/X lässt Nook wie bisher rein
+       lokal weiterlaufen, ohne zu blockieren. -->
+  <div id="sync-login-overlay" class="modal-backdrop hidden">
+    <div class="modal-box" style="width:400px;">
+      <div class="modal-head">
+        <span>☁️ Geräte-Sync</span>
+        <button class="modal-x" id="sync-login-close">✕</button>
+      </div>
+      <div id="sync-login-step-email">
+        <p class="modal-hint">Melde dich an, damit deine Daten automatisch zwischen all deinen Geräten synchronisiert werden. Kein Passwort nötig — du bekommst einen Anmelde-Link per E-Mail.</p>
+        <div class="modal-row"><label>E-Mail</label><input type="email" class="modal-input" id="sync-login-email" placeholder="du@beispiel.de" autocomplete="email"/></div>
+        <p class="modal-hint" id="sync-login-error" style="color:var(--prio-1);display:none;"></p>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="sync-login-skip">Später</button>
+          <button class="btn-primary" id="sync-login-send">Link senden</button>
+        </div>
+      </div>
+      <div id="sync-login-step-sent" class="hidden">
+        <p class="modal-hint">Wir haben dir einen Anmelde-Link an <strong id="sync-login-sent-email"></strong> geschickt. Öffne ihn auf diesem Gerät, um dich anzumelden.</p>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="sync-login-sent-close">Schließen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync-Update-Hinweis (js/sync.js) — erscheint, wenn ein anderes Gerät
+       Daten geändert hat, während diese Seite offen war. Bewusst kein
+       Auto-Reload während aktiver Nutzung (siehe Kommentar in sync.js). -->
+  <div id="sync-update-banner" class="floating-update-banner hidden">
+    <span>Auf einem anderen Gerät aktualisiert</span>
+    <button id="sync-update-reload-btn">Neu laden</button>
+  </div>
+
+  <!-- App-Update-Hinweis (js/pwa.js) — erscheint, wenn der Service Worker
+       im Hintergrund eine neue Version von Nook geladen und aktiviert hat
+       (CSS/JS wurden neu deployed). Ohne diesen Hinweis liefert der
+       Service Worker CSS/JS weiterhin cache-first aus dem laufenden Tab
+       aus, ein Deploy kommt also unbemerkt erst beim nächsten Neuladen an
+       — siehe Kommentar in sw.js. Bewusst kein Auto-Reload, gleiche
+       Begründung wie beim Sync-Banner oben. -->
+  <div id="sw-update-banner" class="floating-update-banner hidden">
+    <span>Neue Version verfügbar</span>
+    <button id="sw-update-reload-btn">Neu laden</button>
+  </div>
+
+  <!-- Hub-weites Bestätigungs-Modal (hub-utils.js: hubConfirm()) — ersetzt
+       native confirm()-Dialoge durch ein Nook-gestyltes Modal. Tab-
+       unabhängig nutzbar, aktuell vom Games-Reset (games.js/settings.js)
+       verwendet. -->
+  <div id="hub-confirm-overlay" class="modal-backdrop hidden">
+    <div class="modal-box" style="width:400px;">
+      <div class="modal-head">
+        <span id="hub-confirm-title">Bist du sicher?</span>
+        <button class="modal-x" id="hub-confirm-close">✕</button>
+      </div>
+      <p id="hub-confirm-message" class="modal-hint"></p>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="hub-confirm-cancel">Abbrechen</button>
+        <button class="btn-primary" id="hub-confirm-ok">Bestätigen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Games: Statistik-Modal -->
   <div id="games-stats-modal-overlay" class="modal-backdrop hidden">
     <div class="modal-box" style="width:480px;">
@@ -2497,6 +2602,7 @@
         <button class="modal-x" id="games-stats-modal-close">✕</button>
       </div>
       <div id="games-stats-modal-body" class="games-stats-modal-body"></div>
+      <button class="btn-ghost hidden" id="games-stats-modal-reset" style="width:100%;font-size:13px;color:var(--prio-1);border-color:var(--prio-1);">Statistiken zurücksetzen</button>
     </div>
   </div>
 
@@ -2546,6 +2652,17 @@
 
   <script src="js/main.js"></script>
   <script src="js/hub-utils.js"></script>
+  <!-- Supabase-SDK per CDN (UMD-Build, kein npm/Build-Step für die Kern-App
+       nötig) — stellt window.supabase bereit, das js/sync.js direkt danach
+       nutzt. Explizit der UMD-Pfad, nicht das bloße Paket (das würde den
+       ESM-Build ausliefern, der keinen window.supabase-Global erzeugt). -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <!-- Persönliche, nicht versionierte Zugangsdaten (js/sync-config.js,
+       siehe .gitignore + sync-config.example.js) — fehlt sie (z.B. bei
+       einem frischen Fork ohne eigenes Supabase-Projekt), läuft Nook
+       bewusst fehlerfrei rein lokal weiter (siehe sync.js). -->
+  <script src="js/sync-config.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/calendar.js"></script>
   <script src="js/today.js"></script>
   <script src="js/gruppendienste.js"></script>
@@ -2575,5 +2692,6 @@
   <script src="js/tools-converter.js"></script>
   <script src="js/tools-datarate.js"></script>
   <script src="js/tools-notenmanager.js"></script>
+  <script src="js/pwa.js"></script>
 </body>
 </html>
