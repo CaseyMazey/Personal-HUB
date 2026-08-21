@@ -390,3 +390,97 @@
   .gd-col { padding: 10px 0 !important; }
   .gd-col + .gd-col { border-left: none; border-top: 1px solid var(--border); }
 }
+
+/* =============================================================
+   MOBILE TODAY-ÜBERARBEITUNG (≤480px, gleiche Phone-Schwelle wie
+   #mobile-bottom-nav in main.css)
+   Desktop-Layout bleibt komplett unverändert — alle Regeln hier sind
+   auf die Phone-Breite beschränkt.
+============================================================= */
+
+/* ── Begrüßungszeile + Schnellnotiz-Icon ─────────────────────── */
+.today-quicknote-icon-btn { display: none; }
+
+@media (max-width: 480px) {
+  .today-greeting-row { display: flex; align-items: center; gap: 10px; }
+  .today-quicknote-icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; flex-shrink: 0;
+    border-radius: 50%; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text-2);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+  }
+  .today-quicknote-icon-btn:hover { background: var(--accent-soft); color: var(--text); }
+
+  /* Uhr entfällt auf Mobile — Begrüßung + Datum/KW oben reichen aus. */
+  #clock-sidebar-panel { display: none; }
+}
+
+/* ── Unterrichtsblöcke: horizontal scrollbare Karten ─────────── */
+@media (max-width: 480px) {
+  #blocks-row {
+    display: flex;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 10px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #blocks-row .block-slot {
+    flex: 0 0 86%;
+    scroll-snap-align: center;
+  }
+}
+
+/* ── Aufgaben: kompakte Zähler-Kachel statt voller Liste ─────── */
+.today-tasks-tile { display: none; }
+
+@media (max-width: 480px) {
+  .today-tasks-tile { display: block; cursor: pointer; }
+  .today-tasks-tile:focus-visible { outline: 2px solid var(--sage); outline-offset: 2px; }
+  .ttt-row { display: flex; padding: 12px 18px 16px; gap: 4px; }
+  .ttt-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+  .ttt-num { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
+  .ttt-label { font-size: 10.5px; color: var(--text-3); }
+
+  /* Aufgaben-Modal: #panel-tasks füllt den Modal-Rahmen selbst aus
+     (eigener Border/Radius/Schatten) statt darin verschachtelt zu wirken. */
+  .tasks-modal-box { padding: 0; gap: 0; overflow: hidden; max-height: 85vh; }
+  .tasks-modal-box #panel-tasks {
+    border: none; border-radius: 0; box-shadow: none;
+    max-height: 85vh; display: flex; flex-direction: column;
+  }
+  .tasks-modal-box #task-list { overflow-y: auto; min-height: 0; }
+  #tasks-modal-slot .tasks-modal-close-btn { display: inline-flex; }
+}
+.tasks-modal-close-btn { display: none; }
+
+/* ── Schnellnotiz-Modal ───────────────────────────────────────── */
+@media (max-width: 480px) {
+  .quicknote-modal-box { padding: 0; gap: 0; overflow: hidden; }
+  .quicknote-modal-box #panel-quicknote { border: none; border-radius: 0; box-shadow: none; }
+  #quicknote-modal-slot .quicknote-modal-close-btn { display: inline-flex; }
+}
+.quicknote-modal-close-btn { display: none; }
+
+/* ── Gruppenpflichten: Accordion, standardmäßig eingeklappt ──── */
+.gd-title-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: none; border: none; padding: 0; margin: 0;
+  cursor: default; color: inherit; text-align: left;
+}
+.gd-arrow { display: none; font-size: 8px; color: var(--text-3); transition: transform 200ms ease; }
+
+@media (max-width: 480px) {
+  .gd-title-btn { cursor: pointer; }
+  .gd-arrow { display: inline-block; }
+  #gd-widget.gd-open .gd-arrow { transform: rotate(90deg); }
+  #gd-widget .gd-body {
+    max-height: 0; overflow: hidden; padding: 0 18px;
+    opacity: 0;
+    transition: max-height 250ms ease, opacity 200ms ease, padding 250ms ease;
+  }
+  #gd-widget.gd-open .gd-body { max-height: 600px; opacity: 1; padding: 14px 18px 16px; }
+}

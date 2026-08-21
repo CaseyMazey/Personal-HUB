@@ -97,7 +97,10 @@ function gdBuildWidget() {
 
   widget.innerHTML = `
     <div class="panel-header">
-      <span class="panel-label">Gruppenpflichten</span>
+      <button type="button" class="gd-title-btn" id="gd-toggle-btn" aria-expanded="false">
+        <span class="gd-arrow">▶</span>
+        <span class="panel-label">Gruppenpflichten</span>
+      </button>
       <div style="display:flex;gap:8px;align-items:center;">
         <span class="gd-week-badge">KW ${kw}</span>
         <button type="button" class="icon-btn gd-edit-btn" id="gd-edit-btn" title="Wochenplan bearbeiten" aria-label="Wochenplan bearbeiten">
@@ -108,6 +111,13 @@ function gdBuildWidget() {
     <div class="gd-body">${bodyHtml}</div>`;
 
   document.getElementById('gd-edit-btn')?.addEventListener('click', () => gdOpenModal(new Date()));
+  // Accordion-Umschalter: wirkt sich nur auf Mobile aus (siehe gd-body-Regel
+  // in today.css, @media max-width:480px) — auf Desktop bleibt gd-body
+  // unabhängig von dieser Klasse immer sichtbar.
+  document.getElementById('gd-toggle-btn')?.addEventListener('click', () => {
+    const isOpen = widget.classList.toggle('gd-open');
+    document.getElementById('gd-toggle-btn')?.setAttribute('aria-expanded', String(isOpen));
+  });
 }
 
 function renderGruppendienste() {

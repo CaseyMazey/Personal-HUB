@@ -517,7 +517,12 @@
             <!-- Begrüßung + Wetter (Header des Hauptbereichs) -->
             <div id="today-main-header">
               <div id="today-greeting-block">
-                <h1 id="today-greeting" class="today-greeting">—</h1>
+                <div class="today-greeting-row">
+                  <h1 id="today-greeting" class="today-greeting">—</h1>
+                  <button type="button" id="today-quicknote-icon-btn" class="today-quicknote-icon-btn" title="Schnellnotiz" aria-label="Schnellnotiz öffnen">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M11 2.3l2.4 2.4-8.1 8.1-3.1.7.7-3.1 8.1-8.1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
                 <div id="today-subtitle" class="today-subtitle">—</div>
               </div>
               <div id="today-weather" class="today-weather">
@@ -539,13 +544,25 @@
               </div>
             </div>
  
-            <!-- Aufgaben — full width -->
+            <!-- Aufgaben — kompakte Kachel, nur Mobile (siehe today.js:
+                 placeTasksWidget() hängt #panel-tasks bei Bedarf hier weg
+                 in #tasks-modal-slot um; Klick öffnet dieses Modal). -->
+            <div class="panel today-tasks-tile" id="today-tasks-tile" role="button" tabindex="0" aria-label="Aufgaben diese Woche öffnen">
+              <div class="panel-header">
+                <span class="panel-label">Aufgaben diese Woche</span>
+                <span class="task-count" id="today-tasks-tile-total"></span>
+              </div>
+              <div class="ttt-row" id="today-tasks-tile-stats"></div>
+            </div>
+
+            <!-- Aufgaben — full width (Desktop) / wandert auf Mobile ins Modal -->
             <div class="panel" id="panel-tasks">
               <div class="panel-header">
                 <span class="panel-label">Aufgaben diese Woche</span>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <span class="task-count" id="task-count"></span>
                   <button class="btn-primary" id="add-task-btn">+ Aufgabe</button>
+                  <button class="modal-x tasks-modal-close-btn" id="tasks-modal-close-btn" aria-label="Schließen">✕</button>
                 </div>
               </div>
               <div id="task-stats" class="task-stats hidden"></div>
@@ -561,7 +578,10 @@
             <div class="panel" id="panel-quicknote">
               <div class="panel-header">
                 <span class="panel-label">Schnellnotiz</span>
-                <span class="save-hint" id="note-saved">gespeichert</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <span class="save-hint" id="note-saved">gespeichert</span>
+                  <button class="modal-x quicknote-modal-close-btn" id="quicknote-modal-close-btn" aria-label="Schließen">✕</button>
+                </div>
               </div>
               <textarea id="quicknote" placeholder="Gedanken, Fragen, Reminders..."></textarea>
             </div>
@@ -2661,6 +2681,24 @@
       </div>
       <div id="games-stats-modal-body" class="games-stats-modal-body"></div>
       <button class="btn-ghost hidden" id="games-stats-modal-reset" style="width:100%;font-size:13px;color:var(--prio-1);border-color:var(--prio-1);">Statistiken zurücksetzen</button>
+    </div>
+  </div>
+
+  <!-- Today Mobile: Schnellnotiz-Modal — #panel-quicknote wird per JS
+       (today.js: placeQuicknoteWidget) auf Mobile in #quicknote-modal-slot
+       umgehängt statt dupliziert. -->
+  <div id="quicknote-modal-overlay" class="modal-backdrop hidden">
+    <div class="modal-box quicknote-modal-box">
+      <div id="quicknote-modal-slot"></div>
+    </div>
+  </div>
+
+  <!-- Today Mobile: Aufgaben-Modal — #panel-tasks wird per JS
+       (today.js: placeTasksWidget) auf Mobile in #tasks-modal-slot
+       umgehängt statt dupliziert. -->
+  <div id="tasks-modal-overlay" class="modal-backdrop hidden">
+    <div class="modal-box tasks-modal-box">
+      <div id="tasks-modal-slot"></div>
     </div>
   </div>
 

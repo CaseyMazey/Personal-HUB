@@ -574,6 +574,7 @@ function renderBlocksProgress() {
 
 function saveBlocks() { DB.set('blocks', blocks); }
 
+let blocksActiveScrolledOnce = false;
 function renderBlocks() {
   const row = document.getElementById('blocks-row');
   row.innerHTML = '';
@@ -613,6 +614,16 @@ function renderBlocks() {
       ul.appendChild(li);
     });
   });
+
+  // Mobile: aktueller Block ist horizontal scrollbar (scroll-snap, siehe
+  // today.css) — beim allerersten Rendern automatisch zum aktiven Block
+  // scrollen, statt ihn hinter vorherigen Karten zu verstecken. Nur einmal
+  // pro Seitenaufruf, damit spätere renderBlocks()-Aufrufe (z.B. nach dem
+  // Bearbeiten einer Aufgabe) die Scrollposition des Nutzers nicht kappen.
+  if (!blocksActiveScrolledOnce && mehrPhoneQuery.matches) {
+    blocksActiveScrolledOnce = true;
+    row.querySelector('.block-slot.active-block')?.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+  }
 
   renderBlocksProgress();
 }
@@ -687,13 +698,14 @@ function renderTasks() {
 
   count.textContent = openTasks.length || '';
 
+  const completedCount = tileTasks.filter(t => taskStatusOf(t) === 'completed').length;
+  const progressCount  = tileTasks.filter(t => taskStatusOf(t) === 'in_progress').length;
+  const openCount       = tileTasks.length - completedCount - progressCount;
+
   if (stats) {
     if (tileTasks.length === 0) {
       stats.classList.add('hidden'); stats.innerHTML = '';
     } else {
-      const completedCount = tileTasks.filter(t => taskStatusOf(t) === 'completed').length;
-      const progressCount  = tileTasks.filter(t => taskStatusOf(t) === 'in_progress').length;
-      const openCount      = tileTasks.length - completedCount - progressCount;
       const completedPct   = Math.round((completedCount / tileTasks.length) * 100);
       const progressPct    = Math.round((progressCount  / tileTasks.length) * 100);
       stats.classList.remove('hidden');
@@ -705,6 +717,8 @@ function renderTasks() {
       `;
     }
   }
+
+  renderTasksMobileTile({ progress: progressCount, planned: openCount, completed: completedCount }, tileTasks.length);
 
   if (tileTasks.length === 0) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
@@ -719,6 +733,30 @@ function renderTasks() {
     doneTasks.forEach(task => list.appendChild(buildTaskItem(task)));
   }
 }
+
+// =========================
+// AUFGABEN — kompakte Kachel (nur Mobile)
+// Ersetzt die volle Aufgabenliste in der mobilen Ansicht durch eine reine
+// Zähler-Übersicht; #panel-tasks selbst wandert per placeTasksWidget() ins
+// Aufgaben-Modal und wird beim Klick auf die Kachel dort sichtbar.
+// =========================
+function renderTasksMobileTile(counts, total) {
+  const totalEl = document.getElementById('today-tasks-tile-total');
+  const statsEl = document.getElementById('today-tasks-tile-stats');
+  if (!statsEl) return;
+  if (totalEl) totalEl.textContent = total || '';
+  statsEl.innerHTML = `
+    <div class="ttt-stat"><span class="ttt-num" style="color:var(${TASK_STATUS.in_progress.dotVar})">${counts.progress}</span><span class="ttt-label">in Bearbeitung</span></div>
+    <div class="ttt-stat"><span class="ttt-num" style="color:var(--text-2)">${counts.planned}</span><span class="ttt-label">geplant</span></div>
+    <div class="ttt-stat"><span class="ttt-num" style="color:var(${TASK_STATUS.completed.dotVar})">${counts.completed}</span><span class="ttt-label">abgeschlossen</span></div>
+  `;
+}
+
+const tasksModal = wireModal('tasks-modal-overlay', { closeIds: ['tasks-modal-close-btn'] });
+document.getElementById('today-tasks-tile')?.addEventListener('click', () => tasksModal.open());
+document.getElementById('today-tasks-tile')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tasksModal.open(); }
+});
 
 // Statuskontrolle je Aufgabe: Klick öffnet ein kleines Dropdown mit allen drei
 // Stufen (offen/in Bearbeitung/abgeschlossen), sodass der Status in eine beliebige
@@ -856,6 +894,39 @@ qn.addEventListener('input', () => {
   clearTimeout(noteTimer);
   const hint = document.getElementById('note-saved'); hint.classList.remove('show');
   noteTimer = setTimeout(() => hint.classList.add('show'), 800);
+});
+
+const quicknoteModal = wireModal('quicknote-modal-overlay', { closeIds: ['quicknote-modal-close-btn'] });
+document.getElementById('today-quicknote-icon-btn')?.addEventListener('click', () => quicknoteModal.open());
+
+// =========================
+// MOBILE: Schnellnotiz + Aufgaben wandern ins jeweilige Modal
+// #panel-quicknote/#panel-tasks werden per DOM-Move umgehängt statt
+// dupliziert — gleiches Muster wie placeSidebarWidgets() in main.js für
+// #sidebar-positivity/#sidebar-countdowns. mehrPhoneQuery (main.js) nutzt
+// dieselbe App-weite Phone-Schwelle (≤480px) wie die Bottom-Nav.
+// =========================
+function placeQuicknoteWidget(isPhone) {
+  const panel = document.getElementById('panel-quicknote');
+  const modalSlot = document.getElementById('quicknote-modal-slot');
+  const miniCal = document.getElementById('today-mini-cal');
+  if (!panel || !modalSlot) return;
+  if (isPhone) modalSlot.appendChild(panel);
+  else miniCal?.before(panel);
+}
+function placeTasksWidget(isPhone) {
+  const panel = document.getElementById('panel-tasks');
+  const modalSlot = document.getElementById('tasks-modal-slot');
+  const blocksSection = document.getElementById('today-blocks-section');
+  if (!panel || !modalSlot) return;
+  if (isPhone) modalSlot.appendChild(panel);
+  else blocksSection?.after(panel);
+}
+placeQuicknoteWidget(mehrPhoneQuery.matches);
+placeTasksWidget(mehrPhoneQuery.matches);
+mehrPhoneQuery.addEventListener('change', (e) => {
+  placeQuicknoteWidget(e.matches);
+  placeTasksWidget(e.matches);
 });
 
 
