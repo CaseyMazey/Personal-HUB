@@ -238,6 +238,7 @@ function wireDeskResize(handle, card, cardEl) {
     document.removeEventListener('mouseup', up);
     document.removeEventListener('touchmove', move);
     document.removeEventListener('touchend', up);
+    document.removeEventListener('touchcancel', up);
     const h = parseInt(cardEl.style.height, 10);
     if (h && h !== card.height) { card.height = h; saveDeskCards(); }
   }
@@ -253,6 +254,9 @@ function wireDeskResize(handle, card, cardEl) {
     startY = e.touches[0].clientY; startH = cardEl.getBoundingClientRect().height;
     document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', up);
+    // Ohne touchcancel bliebe die Karte im "resizing"-Zustand hängen, falls
+    // die Geste unterbrochen wird (System-Geste, eingehender Anruf, o.ä.).
+    document.addEventListener('touchcancel', up);
   }, { passive: true });
 }
 

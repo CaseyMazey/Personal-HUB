@@ -131,3 +131,28 @@
 .today-tile *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
 .today-tile *::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 .today-tile * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+/* ═══════════════════════════════════════════════════════════
+   TOUCH — Bearbeiten-/Löschen-/Kopieren-Buttons sind rein
+   hover-gesteuert (opacity:0, erst bei :hover sichtbar). Auf Geräten
+   ohne Hover ist das nicht nur unsichtbar, sondern unbedienbar: Karten
+   ließen sich mobil weder bearbeiten noch löschen (einziger Weg dahin
+   ist .desk-edit-btn -> Kartenmodal), Checklisten-Einträge nicht
+   einzeln entfernen, Code nicht kopieren. @media(hover:none) statt
+   einer Breitenschwelle, weil die eigentliche Bedingung "kein Hover
+   verfügbar" ist, nicht "schmaler Viewport" (träfe z.B. auch Touch-
+   Tablets in voller Breite). Auf hover-fähigen Geräten (Desktop) exakt
+   unverändert.
+═══════════════════════════════════════════════════════════ */
+@media (hover: none) {
+  .desk-edit-btn,
+  .checklist-item .note-del,
+  .desk-code-copy {
+    opacity: 0.55;
+  }
+  .desk-edit-btn:active,
+  .checklist-item .note-del:active,
+  .desk-code-copy:active {
+    opacity: 1;
+  }
+}
