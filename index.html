@@ -539,9 +539,9 @@
               </div>
             </div>
  
-            <!-- Aufgaben — kompakte Kachel, nur Mobile (siehe today.js:
-                 placeTasksWidget() hängt #panel-tasks bei Bedarf hier weg
-                 in #tasks-modal-slot um; Klick öffnet dieses Modal). -->
+            <!-- Aufgaben — kompakte Kachel, nur Mobile; Klick öffnet das
+                 eigenständige Mobile-Aufgaben-Modal (#tasks-modal-overlay,
+                 gerendert von today.js: renderTasksMobileModal()). -->
             <div class="panel today-tasks-tile" id="today-tasks-tile" role="button" tabindex="0" aria-label="Aufgaben diese Woche öffnen">
               <div class="panel-header">
                 <span class="panel-label">Aufgaben diese Woche</span>
@@ -550,14 +550,14 @@
               <div class="ttt-row" id="today-tasks-tile-stats"></div>
             </div>
 
-            <!-- Aufgaben — full width (Desktop) / wandert auf Mobile ins Modal -->
+            <!-- Aufgaben — Desktop-Karte, auf Mobile ausgeblendet (die Kachel
+                 + das Mobile-Modal übernehmen dort). -->
             <div class="panel" id="panel-tasks">
               <div class="panel-header">
                 <span class="panel-label">Aufgaben diese Woche</span>
                 <div style="display:flex;gap:8px;align-items:center;">
                   <span class="task-count" id="task-count"></span>
-                  <button class="btn-primary" id="add-task-btn" aria-label="Aufgabe hinzufügen"><span class="add-task-plus">+</span><span class="add-task-label"> Aufgabe</span></button>
-                  <button class="modal-x tasks-modal-close-btn" id="tasks-modal-close-btn" aria-label="Schließen">✕</button>
+                  <button class="btn-primary" id="add-task-btn">+ Aufgabe</button>
                 </div>
               </div>
               <div id="task-stats" class="task-stats hidden"></div>
@@ -2676,12 +2676,20 @@
     </div>
   </div>
 
-  <!-- Today Mobile: Aufgaben-Modal — #panel-tasks wird per JS
-       (today.js: placeTasksWidget) auf Mobile in #tasks-modal-slot
-       umgehängt statt dupliziert. -->
+  <!-- Today Mobile: Aufgaben-Modal — eigene kompakte Mobile-Ansicht (nicht
+       die Desktop-Karte #panel-tasks), gerendert von today.js:
+       renderTasksMobileModal()/buildMobileTaskItem(). -->
   <div id="tasks-modal-overlay" class="modal-backdrop hidden">
     <div class="modal-box tasks-modal-box">
-      <div id="tasks-modal-slot"></div>
+      <div class="tasks-mobile-header">
+        <span class="tasks-mobile-title">Aufgaben diese Woche</span>
+        <div class="tasks-mobile-header-actions">
+          <button type="button" class="tasks-mobile-add-btn" id="mobile-add-task-btn" aria-label="Aufgabe hinzufügen">+</button>
+          <button type="button" class="modal-x" id="tasks-modal-close-btn" aria-label="Schließen">✕</button>
+        </div>
+      </div>
+      <ul id="tasks-mobile-list" class="tasks-mobile-list"></ul>
+      <div id="tasks-mobile-empty" class="empty-state hidden">Noch keine Aufgaben diese Woche.</div>
     </div>
   </div>
 

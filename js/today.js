@@ -719,6 +719,7 @@ function renderTasks() {
   }
 
   renderTasksMobileTile({ progress: progressCount, planned: openCount, completed: completedCount }, tileTasks.length);
+  renderTasksMobileModal(tileTasks);
 
   if (tileTasks.length === 0) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
@@ -737,8 +738,8 @@ function renderTasks() {
 // =========================
 // AUFGABEN — kompakte Kachel (nur Mobile)
 // Ersetzt die volle Aufgabenliste in der mobilen Ansicht durch eine reine
-// Zähler-Übersicht; #panel-tasks selbst wandert per placeTasksWidget() ins
-// Aufgaben-Modal und wird beim Klick auf die Kachel dort sichtbar.
+// Zähler-Übersicht; Klick auf die Kachel öffnet das eigenständige
+// Mobile-Aufgaben-Modal (siehe renderTasksMobileModal() unten).
 // =========================
 function renderTasksMobileTile(counts, total) {
   const totalEl = document.getElementById('today-tasks-tile-total');
@@ -805,6 +806,76 @@ function buildTaskItem(task) {
   li.append(statusCtrl, dot, info, badge, del);
   return li;
 }
+
+// =========================
+// AUFGABEN-MODAL (Mobile) — eigenständige kompakte Ansicht statt einer
+// verkleinerten Desktop-Karte: einfacher Header + nach Status gruppierte
+// Liste, damit "in Bearbeitung" auf einen Blick auffindbar ist, statt in
+// derselben Statistikzeile wie am Desktop unterzugehen.
+// =========================
+const TASKS_MOBILE_GROUPS = [
+  { status: 'in_progress', label: 'In Bearbeitung' },
+  { status: 'open',        label: 'Geplant / Offen' },
+  { status: 'completed',   label: 'Abgeschlossen' },
+];
+
+function buildMobileTaskItem(task) {
+  const status = taskStatusOf(task);
+  const li = document.createElement('li');
+  li.className = 'tasks-mobile-item task-status-' + status;
+
+  const statusCtrl = buildTaskStatusControl(task);
+
+  const info  = document.createElement('div'); info.className = 'tasks-mobile-item-info';
+  const title = document.createElement('span'); title.className = 'tasks-mobile-item-title'; title.textContent = task.title;
+  info.appendChild(title);
+
+  const _blockIds = Array.isArray(task.blocks) ? task.blocks : (task.block != null ? [task.block] : []);
+  if (_blockIds.length) {
+    const badge = document.createElement('span'); badge.className = 'tasks-mobile-item-badge';
+    badge.textContent = _blockIds.map(b => `B${b}`).join(' ');
+    info.appendChild(badge);
+  }
+  info.addEventListener('click', () => openTaskModal(task));
+
+  const del = document.createElement('button');
+  del.type = 'button'; del.className = 'tasks-mobile-item-delete'; del.setAttribute('aria-label', 'Aufgabe löschen'); del.textContent = '✕';
+  del.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tasks = tasks.filter(t => t.id !== task.id);
+    saveTasks(); renderTasks(); renderBlocks();
+  });
+
+  li.append(statusCtrl, info, del);
+  return li;
+}
+
+function renderTasksMobileModal(tileTasks) {
+  const list  = document.getElementById('tasks-mobile-list');
+  const empty = document.getElementById('tasks-mobile-empty');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (tileTasks.length === 0) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  TASKS_MOBILE_GROUPS.forEach(group => {
+    const groupTasks = tileTasks
+      .filter(t => taskStatusOf(t) === group.status)
+      .sort((a, b) => group.status === 'completed'
+        ? (b.completedAt || 0) - (a.completedAt || 0)
+        : a.priority - b.priority || a.title.localeCompare(b.title));
+    if (!groupTasks.length) return;
+
+    const header = document.createElement('div');
+    header.className = 'tasks-mobile-group-label';
+    header.textContent = `${group.label} · ${groupTasks.length}`;
+    list.appendChild(header);
+    groupTasks.forEach(task => list.appendChild(buildMobileTaskItem(task)));
+  });
+}
+
+document.getElementById('mobile-add-task-btn')?.addEventListener('click', () => openTaskModal());
 
 // =========================
 // TASK MODAL
@@ -895,25 +966,6 @@ qn.addEventListener('input', () => {
   const hint = document.getElementById('note-saved'); hint.classList.remove('show');
   noteTimer = setTimeout(() => hint.classList.add('show'), 800);
 });
-
-// =========================
-// MOBILE: Aufgaben wandern ins Aufgaben-Modal
-// #panel-tasks wird per DOM-Move umgehängt statt dupliziert — gleiches
-// Muster wie placeSidebarWidgets() in main.js für #sidebar-positivity/
-// #sidebar-countdowns. mehrPhoneQuery (main.js) nutzt dieselbe App-weite
-// Phone-Schwelle (≤480px) wie die Bottom-Nav.
-// =========================
-function placeTasksWidget(isPhone) {
-  const panel = document.getElementById('panel-tasks');
-  const modalSlot = document.getElementById('tasks-modal-slot');
-  const blocksSection = document.getElementById('today-blocks-section');
-  if (!panel || !modalSlot) return;
-  if (isPhone) modalSlot.appendChild(panel);
-  else blocksSection?.after(panel);
-}
-placeTasksWidget(mehrPhoneQuery.matches);
-mehrPhoneQuery.addEventListener('change', (e) => placeTasksWidget(e.matches));
-
 
 // =========================
 // REFRESH (wird bei View-Wechsel aufgerufen)

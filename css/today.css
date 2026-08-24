@@ -431,22 +431,84 @@
   .ttt-num { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
   .ttt-label { font-size: 10.5px; color: var(--text-3); }
 
-  /* Aufgaben-Modal: #panel-tasks füllt den Modal-Rahmen selbst aus
-     (eigener Border/Radius/Schatten) statt darin verschachtelt zu wirken. */
-  .tasks-modal-box { padding: 0; gap: 0; overflow: hidden; max-height: 85vh; }
-  .tasks-modal-box #panel-tasks {
-    border: none; border-radius: 0; box-shadow: none;
-    max-height: 85vh; display: flex; flex-direction: column;
-  }
-  .tasks-modal-box #task-list { overflow-y: auto; min-height: 0; }
-  #tasks-modal-slot .tasks-modal-close-btn { display: inline-flex; }
-
-  /* Im Modal reicht ein schlichtes "+" statt "+ Aufgabe" — spart Platz
-     neben Zähler und Schließen-Button in der Kopfzeile. */
-  .tasks-modal-box #add-task-btn { padding: 6px 11px; }
-  .tasks-modal-box .add-task-label { display: none; }
+  /* Desktop-Karte bleibt Desktop vorbehalten — Kachel + eigenes
+     Mobile-Modal (unten) übernehmen ihre Rolle auf Mobile. */
+  #panel-tasks { display: none; }
 }
-.tasks-modal-close-btn { display: none; }
+
+/* =========================
+   AUFGABEN-MODAL (Mobile) — eigenständige, kompakte Detailansicht statt
+   einer verkleinerten Desktop-Karte: schlichter Header + nach Status
+   gruppierte Liste (renderTasksMobileModal()/buildMobileTaskItem() in
+   today.js). Nur ≤480px aktiv, Desktop-Modal-Nutzung gibt es nicht mehr.
+========================= */
+@media (max-width: 480px) {
+  .tasks-modal-box { padding: 0; gap: 0; overflow: hidden; max-height: 82vh; display: flex; flex-direction: column; }
+
+  .tasks-mobile-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 12px 14px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tasks-mobile-title { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; color: var(--text); }
+  .tasks-mobile-header-actions { display: flex; align-items: center; gap: 2px; }
+  .tasks-mobile-add-btn {
+    width: 30px; height: 30px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; border: none;
+    background: var(--sage); color: #fff;
+    font-size: 18px; line-height: 1;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .tasks-mobile-add-btn:active { background: var(--sage-dark, var(--sage)); }
+
+  .tasks-mobile-list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; min-height: 0; }
+
+  .tasks-mobile-group-label {
+    padding: 10px 18px 6px;
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-3);
+  }
+
+  .tasks-mobile-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 8px 14px;
+    min-height: 46px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tasks-mobile-item:last-child { border-bottom: none; }
+  .tasks-mobile-item .task-status-wrap { flex-shrink: 0; padding: 4px; }
+  .tasks-mobile-item .task-status-btn { width: 26px; height: 26px; font-size: 13px; }
+
+  .tasks-mobile-item-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; }
+  .tasks-mobile-item-title {
+    flex: 1; min-width: 0;
+    font-size: 14px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tasks-mobile-item.task-status-completed .tasks-mobile-item-title { color: var(--text-3); text-decoration: line-through; }
+  .tasks-mobile-item-badge {
+    font-size: 10px; font-family: var(--mono); font-weight: 500;
+    color: var(--sage-dark); background: var(--sage-bg); border: 1px solid var(--sage-border);
+    border-radius: 99px; padding: 2px 8px; flex-shrink: 0; white-space: nowrap;
+  }
+  .tasks-mobile-item-delete {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-3); font-size: 12px;
+    border-radius: 50%;
+    transition: background var(--transition), color var(--transition);
+  }
+  .tasks-mobile-item-delete:active { background: var(--accent-soft); color: var(--prio-1); }
+
+  #tasks-mobile-empty { padding: 30px 18px; text-align: center; }
+
+  /* Größerer Tapbereich fürs Status-Dropdown auf Touch. */
+  .task-status-option { padding: 9px 10px; font-size: 13px; }
+}
 
 /* ── Gruppenpflichten: Accordion, standardmäßig eingeklappt ──── */
 .gd-title-btn {
