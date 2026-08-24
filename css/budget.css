@@ -185,7 +185,7 @@
   gap: 24px;
 }
 #budget-title-block { min-width: 0; }
-.budget-title-row { display: flex; align-items: center; gap: 10px; }
+.budget-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .b-ks-header-pill { justify-self: center; }
 #budget-actions { justify-self: end; }
 
