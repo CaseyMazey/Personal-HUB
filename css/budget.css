@@ -1224,13 +1224,11 @@
   display: flex; justify-content: center; align-items: baseline; gap: 6px; font-size: 11px; color: var(--text-2);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--b-radius-xs);
   padding: 4px 8px; margin-top: calc(-1px - var(--gf-i, 0) * 0px);
-  /* pan-y statt none: vertikales Wischen bleibt natives Scrollen, bis ein
-     Long-Press (siehe makeGeldflussDraggable in budget-analysis.js) den
-     Drag bewusst startet — sonst würde touch-action:none jeden Scroll-
-     Versuch über einer Karte kapern. */
-  cursor: grab; touch-action: pan-y; user-select: none; transition: background var(--transition), transform 150ms;
+  /* pan-y statt none: die Karte selbst bleibt normales, natives Scrollen —
+     nur .gf-drag-handle (siehe unten) blockiert dort gezielt die native
+     Touch-Geste, damit Ziehen NUR über den Ziehpunkt starten kann. */
+  cursor: grab; touch-action: pan-y; user-select: none; transition: background var(--transition);
 }
-.gf-stack-item.gf-longpress-pending { transform: scale(0.96); background: var(--b-red-soft); }
 .gf-stack-item:hover { background: var(--b-red-soft); }
 .gf-stack-item--over { background: var(--b-red-soft); color: var(--b-red); border-color: var(--b-red); }
 .gf-stack-item + .gf-stack-item { margin-top: 3px; }
@@ -1259,13 +1257,35 @@
   transition: box-shadow var(--transition), transform var(--transition);
 }
 .gf-consumer-card:hover { box-shadow: 0 3px 10px rgba(50,40,20,0.10); transform: translateY(-1px); }
-.gf-consumer-card.gf-longpress-pending { transform: scale(0.97); box-shadow: 0 0 0 2px var(--sage); }
 .gf-consumer-card.gf-drag-source, .gf-stack-item.gf-drag-source { opacity: 0.35; }
 .gf-consumer-card.gf-consumer-red    { background: var(--b-red-soft);    border-left: 3px solid var(--b-red); }
 .gf-consumer-card.gf-consumer-blue   { background: var(--b-blue-soft);   border-left: 3px solid var(--b-blue); }
 .gf-consumer-card.gf-consumer-purple { background: var(--b-purple-soft); border-left: 3px solid var(--b-purple); }
+.gf-consumer-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .gf-consumer-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .gf-consumer-amount { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); flex-shrink: 0; }
+
+/* ── Ziehpunkt für Touch — auf Desktop unsichtbar (Maus zieht wie gehabt
+   von der ganzen Karte aus), auf Touch-Geräten die EINZIGE Stelle, die
+   einen Drag startet. touch-action:none NUR hier, nicht auf der Karte
+   selbst — dadurch bleibt der Rest der Karte immer normales, natives
+   Scrollen (siehe makeGeldflussDraggable in budget-analysis.js). */
+.gf-drag-handle {
+  display: none;
+  flex-shrink: 0; align-items: center; justify-content: center;
+  color: var(--text-3); font-size: 12px; line-height: 1;
+  touch-action: none; cursor: grab;
+}
+@media (hover: none) and (pointer: coarse) {
+  .gf-drag-handle {
+    display: flex;
+    /* größere Tapfläche als das sichtbare Symbol, ohne die Optik zu
+       vergrößern — bewusst moderat (nicht 44px), da .gf-stack-item mit
+       nur 3px Abstand gestapelt wird und größere Überlappung benachbarter
+       Ziehpunkte träfe. */
+    padding: 6px; margin: -6px -2px -6px -6px;
+  }
+}
 
 .gf-add-btn {
   margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--b-radius-sm);

@@ -241,14 +241,17 @@ function renderGeldflussStack(stackEl, stack, recurringId, cardUid){
     const mini = document.createElement('div');
     mini.className = 'gf-stack-item' + (item.over ? ' gf-stack-item--over' : '');
     mini.style.setProperty('--gf-i', i);
-    mini.innerHTML = `<span>${GELDFLUSS_ICON[item.kind] || ''} ${item.name}</span><span>${fmtEuro(item.amount)}</span>`;
+    mini.innerHTML = `<span class="gf-drag-handle" aria-hidden="true">⠿</span><span>${GELDFLUSS_ICON[item.kind] || ''} ${item.name}</span><span>${fmtEuro(item.amount)}</span>`;
     mini.title = 'Klicken zum Entfernen — oder auf eine andere Einnahme ziehen';
     // Klicken UND Ziehen laufen jetzt über denselben Mechanismus
     // (makeGeldflussDraggable erkennt anhand der Bewegung, was gemeint
     // ist) — kein separater 'click'-Listener mehr, der mit dem Drag-
     // System kollidieren könnte. cardUid identifiziert die KONKRETE
     // Karte, aus der diese Zuordnung stammt (siehe geldflussAssign).
-    makeGeldflussDraggable(mini, { kind: item.kind, id: item.id, name: item.name }, item.amount, recurringId, item.fundingEntryId, cardUid);
+    // .gf-drag-handle: auf Touch nur darüber ziehbar (siehe
+    // makeGeldflussDraggable) — auf Desktop unsichtbar, Maus zieht wie
+    // gehabt von der ganzen Karte aus.
+    makeGeldflussDraggable(mini, { kind: item.kind, id: item.id, name: item.name }, item.amount, recurringId, item.fundingEntryId, cardUid, mini.querySelector('.gf-drag-handle'));
     stackEl.appendChild(mini);
   });
 }
@@ -345,9 +348,12 @@ function renderGeldflussConsumerCard(cons, colorClass){
   const el = document.createElement('div');
   el.className = 'gf-consumer-card' + (colorClass ? ' ' + colorClass : '');
   el.innerHTML = `
-    <span class="gf-consumer-name">${GELDFLUSS_ICON[cons.kind] || ''} ${cons.name}</span>
+    <span class="gf-consumer-left">
+      <span class="gf-drag-handle" aria-hidden="true">⠿</span>
+      <span class="gf-consumer-name">${GELDFLUSS_ICON[cons.kind] || ''} ${cons.name}</span>
+    </span>
     <span class="gf-consumer-amount">${fmtEuro(remainder)}${cons.kind === 'goal' && cons.isMonthly ? '/Monat' : ''}</span>`;
-  makeGeldflussDraggable(el, cons, remainder, null);
+  makeGeldflussDraggable(el, cons, remainder, null, undefined, undefined, el.querySelector('.gf-drag-handle'));
   return el;
 }
 
@@ -404,18 +410,27 @@ function renderGeldflussGroup(container, title, dotColorVar, cardColorClass, con
 // endet garantiert mit einem renderFinanzanalyse()-Aufruf, sobald sich
 // die Daten geändert haben.
 let gfDrag = null;
-const GF_DRAG_THRESHOLD = 4; // Pixel Bewegung, ab der "ziehen" statt "klicken" gilt (Maus/Pen, und nach bestätigtem Long-Press)
+const GF_DRAG_THRESHOLD = 4; // Pixel Bewegung, ab der "ziehen" statt "klicken" gilt
 
 // Touch: ein Drag darf NIE direkt aus einem Antippen oder vertikalen Wischen
-// entstehen (sonst reißt jeder Scroll-Versuch über einer Karte einen Drag
-// los — gemeldeter Bug). Start deshalb nur nach bewusstem Long-Press.
-// GF_TOUCH_CANCEL_PX ist die Toleranz WÄHREND der Wartezeit: Bewegung
-// darüber gilt als Scroll-Absicht, der Long-Press wird abgebrochen und die
-// Geste bleibt ein normaler, natives Scrollen. Maus/Pen sind unverändert —
-// dort startet der Drag weiterhin sofort wie bisher (Desktop bleibt gleich).
-const GF_LONGPRESS_MS = 450;
-const GF_TOUCH_CANCEL_PX = 8;
-
+// auf der Karte selbst entstehen (sonst reißt jeder Scroll-Versuch einen
+// Drag los). Start deshalb nur über den kleinen Ziehpunkt (.gf-drag-handle,
+// nur auf Touch-Geräten sichtbar, siehe CSS @media(pointer:coarse)) — der
+// Rest der Karte bleibt zu 100% natives Scrollen, ohne jede JS-Einmischung.
+//
+// FRÜHERER ANSATZ (Long-Press auf der ganzen Karte) scheiterte in der
+// Praxis: touch-action:pan-y + kein preventDefault während der Wartezeit
+// erlaubten dem Browser, die Geste schon als natives Scrollen zu
+// übernehmen, sobald sich der Finger bewegte — auch NACH Ablauf des
+// Timers ließ sich das per preventDefault() im pointermove nicht mehr
+// zurückholen (Browser committen früh, nicht rückgängig machbar). Der
+// Browser schickte statt eines pointerup ein pointercancel, das nicht
+// behandelt wurde — Ghost-Element und Drag-Status blieben dauerhaft
+// hängen (auch tab-übergreifend, da an <body> angehängt). Ein dedizierter
+// Ziehpunkt mit eigenem touch-action:none umgeht das Problem komplett:
+// der Browser sieht dort von Anfang an keine Scroll-Geste. Maus/Pen sind
+// unverändert — dort startet der Drag weiterhin sofort von der ganzen
+// Karte aus, wie schon immer (Desktop bleibt gleich).
 function beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e){
   const rect = el.getBoundingClientRect();
   const ghost = el.cloneNode(true);
@@ -430,36 +445,22 @@ function beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryI
   el.classList.add('gf-drag-source');
   moveGfGhost(e.clientX, e.clientY);
   document.addEventListener('pointermove', onGfPointerMove);
-  document.addEventListener('pointerup', onGfPointerUp, { once: true });
+  document.addEventListener('pointerup', onGfPointerUp);
+  // pointercancel: springt ein, wenn der Browser den Pointer aus welchem
+  // Grund auch immer abbricht (z. B. System-Geste, Mehrfach-Touch) — ohne
+  // diesen Handler bliebe der Ghost dauerhaft hängen (siehe Kommentar oben).
+  document.addEventListener('pointercancel', onGfPointerUp);
 }
 
-function makeGeldflussDraggable(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid){
+function makeGeldflussDraggable(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, dragHandle){
   el.addEventListener('pointerdown', e => {
     if (e.button !== undefined && e.button !== 0) return;
 
     if (e.pointerType === 'touch') {
-      const startX = e.clientX, startY = e.clientY;
-      let timer = null;
-      const cleanup = () => {
-        clearTimeout(timer);
-        el.removeEventListener('pointermove', onPendingMove);
-        el.removeEventListener('pointerup', onPendingEnd);
-        el.removeEventListener('pointercancel', onPendingEnd);
-        el.classList.remove('gf-longpress-pending');
-      };
-      const onPendingMove = me => {
-        if (Math.hypot(me.clientX - startX, me.clientY - startY) > GF_TOUCH_CANCEL_PX) cleanup();
-      };
-      const onPendingEnd = () => cleanup();
-      el.addEventListener('pointermove', onPendingMove);
-      el.addEventListener('pointerup', onPendingEnd);
-      el.addEventListener('pointercancel', onPendingEnd);
-      el.classList.add('gf-longpress-pending');
-      timer = setTimeout(() => {
-        cleanup();
-        beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e);
-      }, GF_LONGPRESS_MS);
-      return; // kein preventDefault — natives Scrollen bleibt bis zum Long-Press aktiv
+      if (!dragHandle || (e.target !== dragHandle && !dragHandle.contains(e.target))) return;
+      e.preventDefault();
+      beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e);
+      return;
     }
 
     e.preventDefault();
@@ -484,6 +485,8 @@ function onGfPointerMove(e){
 }
 function onGfPointerUp(e){
   document.removeEventListener('pointermove', onGfPointerMove);
+  document.removeEventListener('pointerup', onGfPointerUp);
+  document.removeEventListener('pointercancel', onGfPointerUp);
   if (!gfDrag) return;
   const { cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, ghost, moved } = gfDrag;
   document.querySelectorAll('.gf-drop-hover').forEach(el => el.classList.remove('gf-drop-hover'));
