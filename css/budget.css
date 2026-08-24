@@ -179,15 +179,23 @@
    HEADER
 ═══════════════════════════════════════════════════════════ */
 #budget-header {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 24px;
 }
 #budget-title-block { min-width: 0; }
-.budget-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .b-ks-header-pill { justify-self: center; }
 #budget-actions { justify-self: end; }
+
+/* Menü-Button: unabhängig vom Grid-Fluss in die obere rechte Ecke der
+   gesamten Kopfzeile gepinnt — dort bleibt es in beiden Layouts stabil.
+   Auf Desktop kollidiert das nicht mit dem Monatspicker: der sitzt
+   #budget-header{align-items:center} zentriert und beginnt daher
+   spürbar unterhalb der oberen Kante. Auf Mobile ist #budget-header der
+   ganze gestapelte Block, "oben rechts" liegt dort neben "Budget". */
+#budget-header-menu-btn { position: absolute; top: 0; right: 0; }
 
 /* Kontostand Pill — mittig im Header */
 .b-ks-header-pill {
