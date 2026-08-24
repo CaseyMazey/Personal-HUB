@@ -552,6 +552,75 @@
 }
 
 /* =============================================================
+   MOBILE (≤480px, gleiche Phone-Schwelle wie #mobile-bottom-nav in
+   main.css) — Hero wird zur kompakten Kopfzeile statt hoher Fotokarte,
+   die Wetterkarte zur horizontalen Streifen-Reihe (gleiches Muster wie
+   die Aufgaben-Kachel im Today-Tab). Die Monatsansicht bleibt eine
+   vollständige 7-Spalten-Woche statt horizontal zu scrollen, damit die
+   Wochenstruktur erhalten bleibt — Termine/Aufgaben/Geburtstage werden
+   dafür zu reinen Farbpunkten, weil laufender Text bei ~45px Spalten-
+   breite ohnehin nicht mehr lesbar wäre. Details liefert weiterhin das
+   Tagesmodal beim Antippen (siehe calendar.md: Tagesansicht).
+============================================================= */
+@media (max-width: 480px) {
+  .cal-hero { padding: 14px 14px 12px; min-height: 0; margin-bottom: 12px; }
+  #cal-hero-text .view-title { font-size: 25px; margin-bottom: 5px; }
+  .cal-season-tag { font-size: 11.5px; margin-bottom: 5px; }
+  #cal-season-sentence { font-size: 13.5px; max-width: 100%; }
+
+  /* Wetterkarte: drei gestapelte Zeilen → eine kompakte horizontale
+     Streifen-Reihe (Icon + Wert je Spalte), spart deutlich Höhe. */
+  #cal-info-card { flex-direction: row; padding: 8px 2px; gap: 0; }
+  .cal-info-row { flex: 1; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 2px 0; }
+  .cal-info-divider { width: 1px; height: auto; align-self: stretch; }
+  .cal-info-icon { width: 20px; height: 20px; font-size: 15px; }
+  .cal-info-main { font-size: 11px; white-space: normal; }
+  .cal-info-sub { font-size: 9px; white-space: normal; line-height: 1.25; }
+
+  /* Monatsraster: kompaktere Zellen, engere Kopfzeile. */
+  #calendar-grid { grid-template-columns: 1.4rem repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(48px, auto); border-radius: var(--radius-sm); }
+  .cal-day-name { font-size: 9px; padding: 6px 0; }
+  .cal-kw-cell  { font-size: 9px; padding-top: 6px; }
+  .cal-day { padding: 4px 3px; min-height: 48px; gap: 2px; }
+  .cal-day-num { font-size: 11px; margin-bottom: 2px; }
+
+  /* Termine/Aufgaben/Geburtstage/Feiertage werden zu Farbpunkten statt
+     Text-Pillen — bei dieser Spaltenbreite wäre laufender Text ohnehin
+     nur noch Rauschen. Mehrtägige Termine bleiben als schmaler
+     durchgehender Streifen erkennbar (Kernprinzip "Balken" bleibt). */
+  .cal-items { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 3px; }
+  .cal-event-pill,
+  .cal-task-pill,
+  .cal-holiday-pill,
+  .cal-birthday-cal-pill {
+    width: 6px; height: 6px; min-width: 0; flex: 0 0 auto;
+    padding: 0; margin: 0; border: none; border-radius: 50%;
+    font-size: 0; line-height: 0; overflow: hidden;
+    background: var(--sage);
+  }
+  .cal-event-pill.countdown-pill  { background: var(--prio-1); }
+  .cal-task-pill.prio-1           { background: var(--prio-1); }
+  .cal-task-pill.prio-2           { background: var(--prio-2); }
+  .cal-task-pill.prio-3           { background: var(--prio-3); }
+  .cal-task-pill--done            { opacity: 0.4; }
+  .cal-holiday-pill               { background: var(--amber); }
+  .cal-birthday-cal-pill          { background: var(--birthday-accent); }
+  .cal-birthday-reminder-pill     { opacity: 0.5; }
+
+  .cal-event-pill.cal-span {
+    flex-basis: 100%; width: auto; height: 4px;
+    margin: 0 -3px; border-radius: 0;
+  }
+  .cal-event-pill.cal-span.cal-span-start  { border-radius: 99px 0 0 99px; margin-left: 0; }
+  .cal-event-pill.cal-span.cal-span-end    { border-radius: 0 99px 99px 0; margin-right: 0; }
+  .cal-event-pill.cal-span.cal-span-single { border-radius: 99px; margin: 0; }
+
+  /* "+N weitere" ergibt bei reiner Punktdarstellung keinen Sinn mehr —
+     das Tagesmodal zeigt beim Antippen ohnehin die vollständige Liste. */
+  .cal-more { display: none; }
+}
+
+/* =============================================================
    PHASE 2 — GEBURTSTAGE
 ============================================================= */
 .cal-birthday-item {
