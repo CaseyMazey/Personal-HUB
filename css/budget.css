@@ -467,6 +467,17 @@
 #budget-liquidity { margin-bottom: 0; }
 #budget-garden-slot { min-height: 180px; }
 
+/* Grid-Items dürfen wie Flex-Items standardmäßig nicht unter ihre
+   Content-Breite schrumpfen (min-width:auto) — .b-liq-title enthält mit
+   "LIQUIDITÄTSVORSCHAU" (uppercase, letter-spacing) ein einzelnes langes
+   Wort, das diese Karte auf schmalen Phones über den Grid-Track hinaus
+   drückt und dadurch die ganze Seite seitlich scrollen lässt. min-width:0
+   erlaubt echtes Schrumpfen/Umbrechen statt starrem Überlauf; auf Desktop
+   ohne Effekt, da dort ohnehin genug Platz vorhanden ist. */
+#budget-liquidity, #budget-garden-slot { min-width: 0; }
+.b-liq-title { min-width: 0; overflow-wrap: break-word; }
+.b-liq-expense-item > span:first-child { min-width: 0; overflow-wrap: break-word; }
+
 /* ══════════════════════════════════════════════════════════════
    FINANZGARTEN — Hauptkarte
 ══════════════════════════════════════════════════════════════ */
@@ -1691,5 +1702,30 @@
      darf bei Bedarf zweizeilig umbrechen statt den Button zu quetschen. */
   .b-card-header { padding: 12px 14px 10px; }
   .b-card-add-btn { padding: 0 10px; font-size: 11.5px; }
+
+  /* ── Wiederkehrende/Einmalige Posten, Sparziele: Zeilen-Layout ──
+     Ursachen der "gequetschten" Optik auf Mobile:
+     1) Kartenkopf (16px), Posten-Zeilen (20px) und Summenzeile (24px)
+        haben auf Desktop bewusst unterschiedliche Innenabstände — auf
+        der schmalen Mobile-Spalte macht das drei sichtbar versetzte
+        linke Kanten statt einer sauberen Linie. Wird hier vereinheitlicht.
+     2) .budget-row zentriert den rechten Block (Status/Betrag/Icons)
+        vertikal (align-items:center) gegen den linken Block — der aber
+        durch Name-Zeile + Frequenz-Badge darunter praktisch immer
+        zweizeilig ist. Der rechte Block "schwebt" dadurch mittig
+        zwischen beiden Zeilen statt an der Namenszeile zu kleben.
+        Fix: rechter Block richtet sich an der Namenszeile aus (Beginn
+        der Zeile), analog zu einer klaren Listenzeile.
+     3) Bearbeiten-/Löschen-Icons sind rein hover-gesteuert (opacity:0)
+        — auf Touch ohne Hover unsichtbar UND unbedienbar. Sie
+        reservieren aber weiterhin unsichtbaren Platz, wodurch der
+        Betrag nicht wirklich am rechten Rand zu kleben scheint. Auf
+        Mobile deshalb dauerhaft sichtbar (kein Hover verfügbar). */
+  .b-section-label { padding: 10px 14px 6px; }
+  .budget-row { align-items: flex-start; padding: 9px 14px; gap: 8px; }
+  .budget-row-right { padding-top: 1px; }
+  .b-sum-row { padding: 10px 14px 12px; }
+  .budget-edit-btn,
+  #view-budget .task-delete { opacity: 1; }
 }
 
