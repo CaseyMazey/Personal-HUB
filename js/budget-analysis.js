@@ -404,26 +404,66 @@ function renderGeldflussGroup(container, title, dotColorVar, cardColorClass, con
 // endet garantiert mit einem renderFinanzanalyse()-Aufruf, sobald sich
 // die Daten geändert haben.
 let gfDrag = null;
-const GF_DRAG_THRESHOLD = 4; // Pixel Bewegung, ab der "ziehen" statt "klicken" gilt
+const GF_DRAG_THRESHOLD = 4; // Pixel Bewegung, ab der "ziehen" statt "klicken" gilt (Maus/Pen, und nach bestätigtem Long-Press)
+
+// Touch: ein Drag darf NIE direkt aus einem Antippen oder vertikalen Wischen
+// entstehen (sonst reißt jeder Scroll-Versuch über einer Karte einen Drag
+// los — gemeldeter Bug). Start deshalb nur nach bewusstem Long-Press.
+// GF_TOUCH_CANCEL_PX ist die Toleranz WÄHREND der Wartezeit: Bewegung
+// darüber gilt als Scroll-Absicht, der Long-Press wird abgebrochen und die
+// Geste bleibt ein normaler, natives Scrollen. Maus/Pen sind unverändert —
+// dort startet der Drag weiterhin sofort wie bisher (Desktop bleibt gleich).
+const GF_LONGPRESS_MS = 450;
+const GF_TOUCH_CANCEL_PX = 8;
+
+function beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e){
+  const rect = el.getBoundingClientRect();
+  const ghost = el.cloneNode(true);
+  ghost.className = el.className + ' gf-drag-ghost';
+  ghost.style.width = rect.width + 'px';
+  document.body.appendChild(ghost);
+  gfDrag = {
+    cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, ghost,
+    offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
+    startX: e.clientX, startY: e.clientY, moved: false,
+  };
+  el.classList.add('gf-drag-source');
+  moveGfGhost(e.clientX, e.clientY);
+  document.addEventListener('pointermove', onGfPointerMove);
+  document.addEventListener('pointerup', onGfPointerUp, { once: true });
+}
 
 function makeGeldflussDraggable(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid){
   el.addEventListener('pointerdown', e => {
     if (e.button !== undefined && e.button !== 0) return;
+
+    if (e.pointerType === 'touch') {
+      const startX = e.clientX, startY = e.clientY;
+      let timer = null;
+      const cleanup = () => {
+        clearTimeout(timer);
+        el.removeEventListener('pointermove', onPendingMove);
+        el.removeEventListener('pointerup', onPendingEnd);
+        el.removeEventListener('pointercancel', onPendingEnd);
+        el.classList.remove('gf-longpress-pending');
+      };
+      const onPendingMove = me => {
+        if (Math.hypot(me.clientX - startX, me.clientY - startY) > GF_TOUCH_CANCEL_PX) cleanup();
+      };
+      const onPendingEnd = () => cleanup();
+      el.addEventListener('pointermove', onPendingMove);
+      el.addEventListener('pointerup', onPendingEnd);
+      el.addEventListener('pointercancel', onPendingEnd);
+      el.classList.add('gf-longpress-pending');
+      timer = setTimeout(() => {
+        cleanup();
+        beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e);
+      }, GF_LONGPRESS_MS);
+      return; // kein preventDefault — natives Scrollen bleibt bis zum Long-Press aktiv
+    }
+
     e.preventDefault();
-    const rect = el.getBoundingClientRect();
-    const ghost = el.cloneNode(true);
-    ghost.className = el.className + ' gf-drag-ghost';
-    ghost.style.width = rect.width + 'px';
-    document.body.appendChild(ghost);
-    gfDrag = {
-      cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, ghost,
-      offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top,
-      startX: e.clientX, startY: e.clientY, moved: false,
-    };
-    el.classList.add('gf-drag-source');
-    moveGfGhost(e.clientX, e.clientY);
-    document.addEventListener('pointermove', onGfPointerMove);
-    document.addEventListener('pointerup', onGfPointerUp, { once: true });
+    beginGfDrag(el, cons, remainder, sourceRecurringId, sourceFundingEntryId, sourceCardUid, e);
   });
 }
 function moveGfGhost(x, y){
@@ -433,6 +473,10 @@ function moveGfGhost(x, y){
   gfDrag.ghost.style.top  = (y - gfDrag.offsetY) + 'px';
 }
 function onGfPointerMove(e){
+  // Während eines aktiven Drags soll die Seite nicht gleichzeitig nativ
+  // mitscrollen (nur relevant für Touch — Maus/Pen scrollen dadurch ohnehin
+  // nicht). e.cancelable schützt gegen evtl. passive Listener-Situationen.
+  if (e.cancelable) e.preventDefault();
   moveGfGhost(e.clientX, e.clientY);
   document.querySelectorAll('.gf-drop-hover').forEach(el => el.classList.remove('gf-drop-hover'));
   const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gf-income-card, .gf-income-bar');

@@ -1173,7 +1173,8 @@
 .gf-week-title { font-size: 12px; font-weight: 700; color: var(--text); }
 .gf-week-total { font-family: var(--mono); font-size: 12px; font-weight: 700; }
 @media (max-width: 760px) { .gf-week-grid { grid-template-columns: repeat(2, 1fr); } .gf-week-col + .gf-week-col { border-left: none; border-top: 1px dashed var(--border); } }
-@media (max-width: 480px) { .gf-week-grid { grid-template-columns: 1fr; } }
+/* ≤480px: bleibt bei 2 Spalten (siehe .gf-week-grid weiter unten im
+   Mobile-Block) statt auf 1 zu wechseln — spart vertikalen Platz. */
 
 .gf-bar-wrap { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .gf-income-bar {
@@ -1223,8 +1224,13 @@
   display: flex; justify-content: center; align-items: baseline; gap: 6px; font-size: 11px; color: var(--text-2);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--b-radius-xs);
   padding: 4px 8px; margin-top: calc(-1px - var(--gf-i, 0) * 0px);
-  cursor: grab; touch-action: none; user-select: none; transition: background var(--transition);
+  /* pan-y statt none: vertikales Wischen bleibt natives Scrollen, bis ein
+     Long-Press (siehe makeGeldflussDraggable in budget-analysis.js) den
+     Drag bewusst startet — sonst würde touch-action:none jeden Scroll-
+     Versuch über einer Karte kapern. */
+  cursor: grab; touch-action: pan-y; user-select: none; transition: background var(--transition), transform 150ms;
 }
+.gf-stack-item.gf-longpress-pending { transform: scale(0.96); background: var(--b-red-soft); }
 .gf-stack-item:hover { background: var(--b-red-soft); }
 .gf-stack-item--over { background: var(--b-red-soft); color: var(--b-red); border-color: var(--b-red); }
 .gf-stack-item + .gf-stack-item { margin-top: 3px; }
@@ -1249,10 +1255,11 @@
 .gf-consumer-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--b-radius-sm);
   box-shadow: 0 1px 4px rgba(50,40,20,0.05); padding: 9px 12px; display: flex; align-items: center;
-  justify-content: space-between; gap: 8px; cursor: grab; touch-action: none; user-select: none;
+  justify-content: space-between; gap: 8px; cursor: grab; touch-action: pan-y; user-select: none;
   transition: box-shadow var(--transition), transform var(--transition);
 }
 .gf-consumer-card:hover { box-shadow: 0 3px 10px rgba(50,40,20,0.10); transform: translateY(-1px); }
+.gf-consumer-card.gf-longpress-pending { transform: scale(0.97); box-shadow: 0 0 0 2px var(--sage); }
 .gf-consumer-card.gf-drag-source, .gf-stack-item.gf-drag-source { opacity: 0.35; }
 .gf-consumer-card.gf-consumer-red    { background: var(--b-red-soft);    border-left: 3px solid var(--b-red); }
 .gf-consumer-card.gf-consumer-blue   { background: var(--b-blue-soft);   border-left: 3px solid var(--b-blue); }
@@ -1758,5 +1765,44 @@
   .b-sum-row { padding: 10px 14px 12px; }
   .budget-edit-btn,
   #view-budget .task-delete { opacity: 1; }
+
+  /* ── Finanzierung (Geldfluss-Board) — eigenständiges Mobile-Layout
+     statt einer schmal gequetschten Desktop-Version. .gf-* wird
+     ausschließlich hier verwendet (budget-analysis.js), daher risikolos
+     eingrenzbar. Drag & Drop selbst bleibt unverändert (siehe
+     makeGeldflussDraggable() — Long-Press-Gate für Touch, Layout hier
+     betrifft nur die Darstellung, nicht die Zuordnungslogik. ── */
+
+  /* Wochen 1–4: 2 Spalten statt 4 einzeln gestapelter Vollbreiten-Reihen
+     — nutzt die Breite statt nur vertikal zu wachsen, bleibt aber pro
+     Karte breit genug für Name + Rest-Betrag. */
+  .gf-week-grid { grid-template-columns: repeat(2, 1fr); }
+  .gf-week-col { padding: 8px; gap: 6px; }
+  .gf-week-title, .gf-week-total { font-size: 11px; }
+
+  .gf-income-card { padding: 8px 9px 7px; }
+  .gf-rest-hero { font-size: 18px; }
+  .gf-income-bar { padding: 10px 12px; }
+  .gf-bar-rest { font-size: 16px; }
+
+  /* Lange Namen/Beträge sollen sauber umbrechen statt aus der Karte zu
+     laufen — betrifft v.a. lange Einnahme-/Postennamen auf schmalen
+     Spalten. */
+  .gf-income-name, .gf-bar-name, .gf-consumer-name,
+  .gf-stack-item span { overflow-wrap: break-word; min-width: 0; }
+
+  /* Stack-Einträge (zugeordnete Posten in einer Einnahme-Karte) und
+     Verbraucher-Karten (unten) etwas großzügiger für Touch. */
+  .gf-stack-item { padding: 6px 8px; font-size: 11.5px; }
+  .gf-consumer-card { padding: 11px 12px; }
+
+  /* Ausgaben/Sparziele/Schulden: eigene Kartenfläche statt reinem
+     Freiraum zwischen den drei Listen — macht die Trennung der
+     Bereiche auf einen Blick sichtbar statt nur durch Abstand. */
+  .gf-group {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--b-radius); box-shadow: var(--b-shadow);
+    padding: 12px;
+  }
 }
 
