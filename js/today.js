@@ -896,24 +896,13 @@ qn.addEventListener('input', () => {
   noteTimer = setTimeout(() => hint.classList.add('show'), 800);
 });
 
-const quicknoteModal = wireModal('quicknote-modal-overlay', { closeIds: ['quicknote-modal-close-btn'] });
-document.getElementById('today-quicknote-icon-btn')?.addEventListener('click', () => quicknoteModal.open());
-
 // =========================
-// MOBILE: Schnellnotiz + Aufgaben wandern ins jeweilige Modal
-// #panel-quicknote/#panel-tasks werden per DOM-Move umgehängt statt
-// dupliziert — gleiches Muster wie placeSidebarWidgets() in main.js für
-// #sidebar-positivity/#sidebar-countdowns. mehrPhoneQuery (main.js) nutzt
-// dieselbe App-weite Phone-Schwelle (≤480px) wie die Bottom-Nav.
+// MOBILE: Aufgaben wandern ins Aufgaben-Modal
+// #panel-tasks wird per DOM-Move umgehängt statt dupliziert — gleiches
+// Muster wie placeSidebarWidgets() in main.js für #sidebar-positivity/
+// #sidebar-countdowns. mehrPhoneQuery (main.js) nutzt dieselbe App-weite
+// Phone-Schwelle (≤480px) wie die Bottom-Nav.
 // =========================
-function placeQuicknoteWidget(isPhone) {
-  const panel = document.getElementById('panel-quicknote');
-  const modalSlot = document.getElementById('quicknote-modal-slot');
-  const miniCal = document.getElementById('today-mini-cal');
-  if (!panel || !modalSlot) return;
-  if (isPhone) modalSlot.appendChild(panel);
-  else miniCal?.before(panel);
-}
 function placeTasksWidget(isPhone) {
   const panel = document.getElementById('panel-tasks');
   const modalSlot = document.getElementById('tasks-modal-slot');
@@ -922,12 +911,8 @@ function placeTasksWidget(isPhone) {
   if (isPhone) modalSlot.appendChild(panel);
   else blocksSection?.after(panel);
 }
-placeQuicknoteWidget(mehrPhoneQuery.matches);
 placeTasksWidget(mehrPhoneQuery.matches);
-mehrPhoneQuery.addEventListener('change', (e) => {
-  placeQuicknoteWidget(e.matches);
-  placeTasksWidget(e.matches);
-});
+mehrPhoneQuery.addEventListener('change', (e) => placeTasksWidget(e.matches));
 
 
 // =========================

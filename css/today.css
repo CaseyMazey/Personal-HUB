@@ -398,21 +398,7 @@
    auf die Phone-Breite beschränkt.
 ============================================================= */
 
-/* ── Begrüßungszeile + Schnellnotiz-Icon ─────────────────────── */
-.today-quicknote-icon-btn { display: none; }
-
 @media (max-width: 480px) {
-  .today-greeting-row { display: flex; align-items: center; gap: 10px; }
-  .today-quicknote-icon-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; flex-shrink: 0;
-    border-radius: 50%; border: 1px solid var(--border-strong);
-    background: var(--surface); color: var(--text-2);
-    cursor: pointer;
-    transition: background var(--transition), color var(--transition);
-  }
-  .today-quicknote-icon-btn:hover { background: var(--accent-soft); color: var(--text); }
-
   /* Uhr entfällt auf Mobile — Begrüßung + Datum/KW oben reichen aus. */
   #clock-sidebar-panel { display: none; }
 }
@@ -454,16 +440,13 @@
   }
   .tasks-modal-box #task-list { overflow-y: auto; min-height: 0; }
   #tasks-modal-slot .tasks-modal-close-btn { display: inline-flex; }
+
+  /* Im Modal reicht ein schlichtes "+" statt "+ Aufgabe" — spart Platz
+     neben Zähler und Schließen-Button in der Kopfzeile. */
+  .tasks-modal-box #add-task-btn { padding: 6px 11px; }
+  .tasks-modal-box .add-task-label { display: none; }
 }
 .tasks-modal-close-btn { display: none; }
-
-/* ── Schnellnotiz-Modal ───────────────────────────────────────── */
-@media (max-width: 480px) {
-  .quicknote-modal-box { padding: 0; gap: 0; overflow: hidden; }
-  .quicknote-modal-box #panel-quicknote { border: none; border-radius: 0; box-shadow: none; }
-  #quicknote-modal-slot .quicknote-modal-close-btn { display: inline-flex; }
-}
-.quicknote-modal-close-btn { display: none; }
 
 /* ── Gruppenpflichten: Accordion, standardmäßig eingeklappt ──── */
 .gd-title-btn {
