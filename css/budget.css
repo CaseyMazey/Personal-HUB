@@ -772,6 +772,8 @@
   color: var(--text);
   cursor: pointer;
   transition: all var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .b-section-label {
@@ -1677,7 +1679,17 @@
 @media (max-width: 480px) {
   #budget-title-block h1 { font-size: 28px; }
   #budget-month-picker { width: 100%; }
-  #budget-actions { gap: 8px; }
+  /* Monatspicker beansprucht die volle Zeile → Zahnrad/Baum-Icons rutschen
+     in eine eigene Zeile und wirken links isoliert; rechtsbündig + etwas
+     kleiner wirken sie wie eine bewusste Werkzeugleiste statt Streuung. */
+  #budget-actions { gap: 8px; justify-content: flex-end; }
+  .b-tree-config-btn { width: 32px; height: 32px; }
   .b-tip-left { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 18px; }
+
+  /* Wiederkehrend/Einmalig/Sparziele: Karten-Header etwas kompakter,
+     "+ Hinzufügen" bleibt einzeilig (siehe .b-card-add-btn), der Titel
+     darf bei Bedarf zweizeilig umbrechen statt den Button zu quetschen. */
+  .b-card-header { padding: 12px 14px 10px; }
+  .b-card-add-btn { padding: 0 10px; font-size: 11.5px; }
 }
 

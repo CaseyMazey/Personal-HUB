@@ -865,9 +865,10 @@ function renderRecurringList(mk) {
     recList.appendChild(header);
     entries.forEach(r => {
       const recPaid = isRecurringPaid(r.id, mk);
-      const freqChip = r.freq==='monthly'
-        ? `<span class="b-freq-chip monthly">Monatlich</span>`
-        : `<span class="b-freq-chip yearly">J\u00e4hrlich \u00b7 ${r.dateDay}.${String(r.dateMonth).padStart(2,'0')}.</span>`;
+      const FREQ_LABELS = { daily: 'T\u00e4glich', weekly: 'W\u00f6chentlich', biweekly: 'Alle 2 Wochen', monthly: 'Monatlich' };
+      const freqChip = r.freq==='yearly'
+        ? `<span class="b-freq-chip yearly">J\u00e4hrlich \u00b7 ${r.dateDay}.${String(r.dateMonth).padStart(2,'0')}.</span>`
+        : `<span class="b-freq-chip monthly">${FREQ_LABELS[r.freq] || 'Monatlich'}</span>`;
       recList.appendChild(makeBudgetRow({
         name:r.name, amount:r.amount, type:r.type, priority:r.priority||'need', paid:recPaid, subtitleHtml:freqChip,
         onEdit: ()=>openRecurringModal(r),
