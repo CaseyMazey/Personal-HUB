@@ -2880,8 +2880,6 @@ const finanzbaumModal = wireModal('finanzbaum-modal-overlay', {
   closeIds: ['finanzbaum-modal-close', 'finanzbaum-config-cancel'],
 });
 
-document.getElementById('finanzbaum-config-btn').addEventListener('click', openFinanzbaumModal);
-
 document.getElementById('finanzbaum-config-save').addEventListener('click', () => {
   const inputs = document.querySelectorAll('.finanzbaum-min-input');
   const mins   = Array.from(inputs).map((inp, i) => {
@@ -2971,10 +2969,59 @@ function renderBudgetArchiv(){
   }
 }
 
-document.getElementById('budget-settings-btn').addEventListener('click', () => {
-  renderBudgetArchiv();
-  budgetArchivModal.open();
-});
+// =========================
+// KOPFZEILEN-MENÜ — vereint Finanzbaum-Konfiguration und Archiv-Zugriff
+// in einem Button neben dem "Budget"-Titel (vorher zwei einzelne Icons
+// im #budget-actions-Bereich; auf Mobile rutschten sie dort isoliert
+// unter den vollbreiten Monatspicker). Gleiches Dropdown-Muster wie
+// .b-garden-dropdown/.task-status-dropdown: an <body> angehängt (fixed),
+// umgeht overflow:hidden der umgebenden Elemente.
+// =========================
+let budgetHeaderMenuEl = null;
+function getBudgetHeaderMenuEl() {
+  if (!budgetHeaderMenuEl) {
+    budgetHeaderMenuEl = document.createElement('div');
+    budgetHeaderMenuEl.className = 'b-header-dropdown';
+    document.body.appendChild(budgetHeaderMenuEl);
+  }
+  return budgetHeaderMenuEl;
+}
+function closeBudgetHeaderMenu() {
+  if (budgetHeaderMenuEl) budgetHeaderMenuEl.classList.remove('open');
+}
+document.addEventListener('click', closeBudgetHeaderMenu);
+document.addEventListener('scroll', closeBudgetHeaderMenu, true);
+window.addEventListener('resize', closeBudgetHeaderMenu);
+
+const budgetHeaderMenuBtn = document.getElementById('budget-header-menu-btn');
+if (budgetHeaderMenuBtn) {
+  budgetHeaderMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = getBudgetHeaderMenuEl();
+    const wasOpen = menu.classList.contains('open');
+    closeBudgetHeaderMenu();
+    if (wasOpen) return;
+
+    menu.innerHTML = `
+      <button type="button" class="b-header-dropdown-item" id="budget-header-menu-finanzbaum">🌳 Finanzbaum konfigurieren</button>
+      <button type="button" class="b-header-dropdown-item" id="budget-header-menu-archiv">📦 Archiv</button>
+    `;
+    const rect = budgetHeaderMenuBtn.getBoundingClientRect();
+    menu.style.top   = (rect.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.classList.add('open');
+
+    document.getElementById('budget-header-menu-finanzbaum').addEventListener('click', () => {
+      closeBudgetHeaderMenu();
+      openFinanzbaumModal();
+    });
+    document.getElementById('budget-header-menu-archiv').addEventListener('click', () => {
+      closeBudgetHeaderMenu();
+      renderBudgetArchiv();
+      budgetArchivModal.open();
+    });
+  });
+}
 
 // Wire secondary add-buttons — bind directly, no DOMContentLoaded proxy needed
 // (DOMContentLoaded may have already fired by the time budget.js runs in a SPA)

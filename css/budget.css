@@ -185,6 +185,7 @@
   gap: 24px;
 }
 #budget-title-block { min-width: 0; }
+.budget-title-row { display: flex; align-items: center; gap: 10px; }
 .b-ks-header-pill { justify-self: center; }
 #budget-actions { justify-self: end; }
 
@@ -246,7 +247,7 @@
   padding-top: 6px;
 }
 
-/* ── Zahnrad-Button Finanzbaum-Konfig ─────────────────────── */
+/* ── Zahnrad-Button: Kopfzeilen-Menü (Finanzbaum-Konfig + Archiv) ── */
 .b-tree-config-btn {
   display: flex;
   align-items: center;
@@ -265,6 +266,32 @@
   color: var(--sage-dark);
   transform: rotate(30deg);
 }
+
+/* Dropdown des Kopfzeilen-Menüs — gleiches Muster wie .b-garden-dropdown:
+   an <body> angehängt (fixed statt absolute), damit es nicht vom
+   overflow:hidden umgebender Karten abgeschnitten wird. */
+.b-header-dropdown {
+  display: none;
+  flex-direction: column;
+  position: fixed;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  z-index: 9999;
+  min-width: 210px;
+  overflow: hidden;
+}
+.b-header-dropdown.open { display: flex; }
+.b-header-dropdown-item {
+  display: flex; align-items: center;
+  width: 100%; padding: 10px 14px;
+  font-size: 13px; color: var(--text);
+  background: none; border: none; cursor: pointer;
+  text-align: left; gap: 8px;
+  transition: background var(--transition);
+}
+.b-header-dropdown-item:hover { background: var(--surface-2); }
 
 /* ── Finanzbaum Konfig Modal ─────────────────────────────── */
 .finanzbaum-config-rows {
@@ -1690,10 +1717,6 @@
 @media (max-width: 480px) {
   #budget-title-block h1 { font-size: 28px; }
   #budget-month-picker { width: 100%; }
-  /* Monatspicker beansprucht die volle Zeile → Zahnrad/Baum-Icons rutschen
-     in eine eigene Zeile und wirken links isoliert; rechtsbündig + etwas
-     kleiner wirken sie wie eine bewusste Werkzeugleiste statt Streuung. */
-  #budget-actions { gap: 8px; justify-content: flex-end; }
   .b-tree-config-btn { width: 32px; height: 32px; }
   .b-tip-left { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 18px; }
 
