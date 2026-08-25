@@ -1,14 +1,15 @@
 /* =============================================================
-   PROJECT-TREE.CSS  (v2)
+   PROJECT-TREE.CSS  (v3 — PNG-Bäume)
    Zuständig NUR für die Baumdarstellung:
-     - Waldbaum-Wrapper, Label, Dot, Balken
-     - Detailbaum-Spalte und Container
-     - Blatt / Apfel / Knospe / Blüte Hover-Effekte
+     - Waldbaum-Wrapper, Label, Dot, Balken (Projektwald-Übersicht)
+     - Detailbaum-Spalte, PNG-Baum + Apfel-/Blüten-Deko (Detailansicht)
    Nicht enthalten: Projektkarten, Modals, Tiles, Detailansicht-Layout
 ============================================================= */
 
 /* =========================
-   BAUM WRAPPER (Wald-Ansicht)
+   BAUM WRAPPER (Wald-Ansicht, PNG-Baum)
+   Positionierung/Größe kommt aus forest.js (left/top/width/z-index inline,
+   siehe FOREST_SLOTS) — hier nur das visuelle Verhalten des Wrappers.
 ========================= */
 .forest-tree-wrap {
   position: absolute;
@@ -17,46 +18,59 @@
   flex-direction: column;
   align-items: center;
   cursor: pointer;
-  transition: transform 200ms ease;
-  z-index: 2;
+  transition: transform 200ms ease, filter 200ms ease;
 }
-.forest-tree-wrap:hover { transform: translateX(-50%) translateY(-4px); z-index: 10; }
-.forest-tree-wrap.archived { filter: saturate(0.7); }
+.forest-tree-wrap:hover { transform: translateX(-50%) translateY(-6px); z-index: 999 !important; }
+.forest-tree-wrap.archived .forest-tree-img { filter: saturate(1.05); }
 
-.forest-tree-svg { line-height: 0; }
-.forest-tree-svg svg { display: block; overflow: visible; }
-
-/* Waldbaum SVG-Skalierung */
-.forest-tree-svg svg { width: 100%; height: auto; display: block; overflow: visible; }
+/* PNG-Projektbaum — deutlich vom (illustrierten) Hintergrund abgesetzt
+   durch Schlagschatten, den der Hintergrund selbst nicht hat. */
+.forest-tree-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 10px rgba(30,25,10,0.22));
+  transition: filter 200ms ease;
+}
+.forest-tree-wrap:hover .forest-tree-img { filter: drop-shadow(0 14px 14px rgba(30,25,10,0.3)) brightness(1.03); }
 
 /* =========================
-   BAUM LABEL
+   PROJEKTKARTE unter dem Baum
 ========================= */
-.forest-tree-label {
-  background: rgba(255,255,255,0.88);
+.forest-tree-card {
+  background: rgba(255,255,255,0.92);
   border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 8px;
-  padding: 5px 8px;
-  margin-top: -8px;
-  min-width: 90px;
-  max-width: 140px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: -10%;
+  min-width: 110px;
+  max-width: 160px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
   backdrop-filter: blur(4px);
+  position: relative;
+  z-index: 1;
 }
-[data-theme-family="dark"] .forest-tree-label {
-  background: rgba(30,34,24,0.88);
+[data-theme-family="dark"] .forest-tree-card {
+  background: rgba(30,34,24,0.9);
   border-color: rgba(255,255,255,0.1);
 }
 
+.forest-tree-card-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .forest-tree-name {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
-  max-width: 120px;
+  max-width: 130px;
 }
 
 .forest-tree-dot {
@@ -88,41 +102,70 @@
 }
 
 /* =========================
-   DETAILBAUM-SPALTE
+   HOVER-INFO — dezente Zusatzinfo bei Hover auf Baum/Karte
+========================= */
+.forest-tree-hover-info {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%) translateY(4px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  max-width: 200px;
+  background: rgba(30,26,18,0.92);
+  color: #f4f0e6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 20;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+  white-space: normal;
+}
+.forest-tree-hover-info strong { font-size: 11.5px; font-weight: 600; }
+.forest-tree-hover-info span { color: rgba(244,240,230,0.78); }
+.forest-tree-wrap:hover .forest-tree-hover-info {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: none;
+}
+
+/* =========================
+   DETAILBAUM-SPALTE (PNG-Baum, dieselbe Variante wie im Projektwald)
 ========================= */
 .pdt-tree-col {
   display: flex;
-  align-items: flex-end;
+  /* Baum mittig im tatsächlich sichtbaren, freien Bereich DIESER Spalte
+     zentrieren (nicht relativ zur ganzen Hero inkl. Projektinfos rechts) —
+     .pdt-hero hat align-items:stretch, die Spalte nutzt also die volle
+     Hero-Höhe für die Zentrierung. */
+  align-items: center;
   justify-content: center;
-  padding: 10px 0 0;
-  min-height: 380px;
   overflow: visible;
 }
-#proj-detail-tree { overflow: visible; display: block; line-height: 0; }
-#proj-detail-tree svg { display: block; overflow: visible; }
+#proj-detail-tree { display: block; }
 
-/* =========================
-   BLATT / KNOSPE HOVER
-========================= */
-.detail-leaf { transition: opacity 120ms, filter 120ms; cursor: pointer; }
-.detail-leaf:hover { opacity: 0.75; filter: brightness(1.18) saturate(1.2); }
+.pdt-tree-wrap { position: relative; width: min(450px, 85%); }
+.pdt-tree-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+  filter: drop-shadow(0 16px 16px rgba(30,25,10,0.25));
+}
 
-/* Erledigtes Blatt: voll sichtbar */
-.detail-leaf--done ellipse { opacity: 0.93; }
-
-/* Knospe: gedämpft */
-.detail-leaf--bud circle { opacity: 0.45; }
-.detail-leaf--bud:hover circle { opacity: 0.62; filter: brightness(1.1); }
-
-/* =========================
-   APFEL / BLÜTE HOVER
-========================= */
-.detail-apple { transition: opacity 120ms, filter 120ms; cursor: pointer; }
-.detail-apple:hover { filter: brightness(1.15) saturate(1.15); }
-
-/* Erledigter Apfel */
-.detail-apple--done circle:first-child { opacity: 0.93; }
-
-/* Blüte (offene Extra-Aufgabe) */
-.detail-apple--bud circle { opacity: 0.6; }
-.detail-apple--bud:hover circle { opacity: 0.82; filter: brightness(1.12); }
+/* Äpfel/Blüten-Deko — rein dekorativ, oben auf der Baumkrone platziert
+   (Positionen: APPLE_SLOTS/BLOSSOM_SLOTS in project-tree.js). Die eigentliche
+   Interaktion (abhaken, Details) läuft über die Äste-Kacheln darunter. */
+.pdt-tree-decor { position: absolute; inset: 0; pointer-events: none; }
+.pdt-tree-decor-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}

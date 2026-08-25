@@ -285,33 +285,27 @@ Jeder Bereich besitzt:
 
 Der Projektwald ist eine alternative Ansicht.
 
-Er visualisiert jedes Projekt als Baum.
+Er visualisiert jedes Projekt als Baum vor einer illustrierten Waldlandschaft (`img/forest.png`).
 
 Der Projektwald dient ausschließlich der Visualisierung.
 
 Er ersetzt nicht die normale Projektübersicht.
 
-Implementiert in `forest.js` (Projektwald-Ansicht, Projektdetailseite) und `project-tree.js` (reine SVG-Baum-Engine) — nicht in `projects.js`, das nur die Kartenübersicht rendert.
+Implementiert in `forest.js` (Projektwald-Ansicht, Projektdetailseite) und `project-tree.js` (PNG-Baumvarianten-Zuweisung + Detailbaum-Rendering) — nicht in `projects.js`, das nur die Kartenübersicht rendert.
+
+Die Wald-Übersicht hat keinen gemeinsamen Hintergrundbalken mehr: Tabs (Alle/Aktiv/Abgeschlossen — Abgeschlossen = archivierte Projekte), Suchfeld und Prioritäts-Filter-Button sind einzelne, schwebende Glas-Pills direkt über der Landschaft (`.forest-toolbar` ist nur noch ein transparenter Layout-Wrapper). Diese Filter beeinflussen nur, welche Bäume angezeigt werden — Archivstatus, Suche & Filter sind reine Anzeigefilter der Waldansicht und verändern keine Projektdaten. Die Bäume stehen in vier festen Tiefenreihen (3/4/3/4, hinterste bis vorderste Reihe, `FOREST_ROW_COUNTS`/`generateForestSlots()`): Reihe bestimmt zuerst die Position (zentriert, mit der Tiefe wachsender Baumabstand), erst danach wird die Größe aus der Tiefe abgeleitet (hinten kleiner & enger, vorne größer & mit deutlich mehr Abstand) — keine Zufallspositionen. Unter jedem Baum sitzt eine schlichte Karte (Statuspunkt, Name, Fortschrittsbalken, Prozentwert) — ohne Äpfel/Blüten, die bleiben der Projektdetailseite vorbehalten. Die Legende unten zeigt nur noch Aktives/Abgeschlossenes Projekt + Hover-Hinweis, passt sich in der Breite an ihren Inhalt an und beansprucht nicht mehr die volle Breite.
 
 ---
 
 # Projektbaum
 
-Die SVG-Baum-Engine (`project-tree.js`) ist bereits funktional vollständig: mehrere Stamm- und Astvarianten, deterministisch pro Projekt-ID generiert. Was laut README noch als "in Entwicklung" gilt, ist in erster Linie die UX-Feinabstimmung, nicht die grundlegende Darstellung.
+Waldübersicht und Projektdetailseite zeigen **denselben** PNG-Baum pro Projekt — kein separates SVG-System mehr für die Detailseite.
 
-Er bildet den Fortschritt eines Projekts als Baum ab.
+PNG-Bäume aus `img/tree_<n>.png` (aktives Projekt) bzw. `img/tree_<n>_fall.png` (abgeschlossenes/archiviertes Projekt), `n` = 1–5. Jedes Projekt bekommt beim ersten Rendern per `getOrAssignTreeVariant()` (`project-tree.js`) dauerhaft eine der 5 Varianten zugewiesen (`project.treeVariant`) und behält sie — dieselbe Variante wird von `buildForestTree()` (Waldübersicht) und `updateDetailTreeElements()` (Detailseite) verwendet. Fehlt eine PNG-Datei, fällt der `<img>`-`onerror`-Handler automatisch auf Variante 1 zurück — weitere Varianten lassen sich also einfach durch Ablegen zusätzlicher PNGs ergänzen.
 
-Geplant ist folgende Symbolik:
+Auf der Detailseite (Hero, ca. 60vh hoch, Baum ca. 50% größer als in der Waldübersicht und mittig im sichtbaren Bereich der Baumspalte zentriert) werden erledigte Aufgaben als Deko auf die Baumkrone gelegt: 🍎 für erledigte Kernaufgaben, 🌸 für erledigte Extraaufgaben. Die Positionen streuen deterministisch (Seed = Projekt-ID) innerhalb einer Ellipse, die konservativ innerhalb der Krone aller 5 Varianten bleibt (`CANOPY_ELLIPSE`, `generateCanopySlots()`) — Stamm/Boden bleiben immer frei. Gedeckelt bei je 8 Stück; rein dekorativ, nicht 1:1 mit einzelnen Aufgaben klickbar.
 
-- Stamm = Projekt
-- Äste = Unterprojekte
-- Blätter = Aufgaben
-- Knospen = offene Aufgaben
-- Blätter = erledigte Aufgaben
-- Blüten = offene Extras
-- Äpfel = erledigte Extras
-
-Die konkrete Darstellung kann sich während der Entwicklung noch ändern.
+Die eigentliche Aufgaben-Interaktion (abhaken, Details öffnen, Unterprojekte/„Äste" verwalten) läuft ausschließlich über die Kacheln im Aufgabenbereich (`renderDetailTiles()`), nicht über den Baum.
 
 ---
 
@@ -402,8 +396,8 @@ Alle Daten werden lokal gespeichert.
 Der Bereich ist auf drei Dateien aufgeteilt:
 
 - **projects.js** — Kartenübersicht, Projektverwaltung, Aufgabenverwaltung, Unterprojekte, Fortschrittsberechnung, Archiv, Projektstatistik, Modalfenster, Inline-Bearbeitung, Verschieben von Aufgaben
-- **forest.js** — Projektwald-Ansicht und Projektdetailseite (Hero, Informationskarte, Aufgabenbereich)
-- **project-tree.js** — reine SVG-Baum-Engine (kein eigener State), von forest.js verwendet
+- **forest.js** — Projektwald-Ansicht (Landschaft, Baum-Positionen, Tabs/Suche/Filter, Legende) und Projektdetailseite (Hero, Informationskarte, Aufgabenbereich)
+- **project-tree.js** — PNG-Baumvarianten-Zuweisung (`getOrAssignTreeVariant`, gemeinsam für Waldübersicht + Detailseite) und Detailbaum-Rendering (`updateDetailTreeElements`, PNG + Apfel/Blüten-Deko), von forest.js verwendet
 
 `projects.js` greift auf `currentDetailProject`/`renderProjectDetail()` aus `forest.js` zu, um nach dem Speichern ggf. die Detailseite neu zu rendern — das ist die einzige direkte Verbindung zwischen den Dateien.
 

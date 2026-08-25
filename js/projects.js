@@ -101,6 +101,15 @@ function formatStartDate(project) {
 // =========================
 
 function renderProjects() {
+  // Wald-Ansicht neu messen/zeichnen, sobald der Tab tatsächlich sichtbar
+  // wird: renderView('projects') ist der einzige Einstiegspunkt, der beim
+  // Reiterwechsel läuft. Der initiale switchToForestView()-Aufruf beim
+  // Laden (forest.js) findet dagegen oft statt, während #view-projects noch
+  // nicht aktiv ist -> container.clientWidth ist dann 0 und der Fallback
+  // (1200px) liefert zu kleine Bäume, bis renderForest() hier mit der
+  // echten Breite erneut läuft.
+  if (typeof forestView !== 'undefined' && forestView) renderForest();
+
   const grid = document.getElementById('project-grid');
   if (!grid) return;
   grid.innerHTML = '';

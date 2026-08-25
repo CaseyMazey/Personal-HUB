@@ -604,12 +604,16 @@
  
       <!-- PROJEKTE -->
       <section id="view-projects" class="view">
-        <div class="view-header">
+        <!-- Kartenansicht-Header — in der Waldansicht komplett ausgeblendet,
+             #project-header-actions wird dafür per JS (forest.js) in den
+             Wald-Overlay-Header umgehängt (gleiches Muster wie Positivity/
+             Countdowns zwischen #sidebar und #view-mehr, siehe main.js). -->
+        <div class="view-header" id="project-plain-header">
           <div>
             <h1 class="view-title">Projekte</h1>
             <div id="project-stats-bar" class="project-stats-bar"></div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
+          <div id="project-header-actions" style="display:flex;gap:8px;align-items:center;">
             <div class="proj-view-toggle">
               <button class="proj-view-btn active" id="proj-view-cards" title="Kartenansicht">
                 <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="8" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="8" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/><rect x="8" y="8" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.4"/></svg>
@@ -622,38 +626,99 @@
             <button class="btn-primary" id="add-project-btn">+ Neues Projekt</button>
           </div>
         </div>
-        <div class="dash-content">
+
+        <div class="dash-content" id="project-dash-content">
           <div id="project-grid"></div>
-          <div id="project-forest" style="display:none;"></div>
+
+          <!-- Waldansicht — Hintergrundbild füllt die komplette verfügbare Fläche,
+               Titel/Tabs/Suche/Filter/Legende liegen als Overlays direkt darauf
+               (kein separater Header/Toolbar-Bereich mehr, siehe projects.css). -->
+          <div id="project-forest-wrap" style="display:none;">
+            <div id="project-forest">
+              <div class="forest-bg">
+                <img src="img/forest.png" alt="" class="forest-bg-img" draggable="false" />
+              </div>
+
+              <div class="forest-overlay-top">
+                <div class="forest-overlay-header-row">
+                  <div class="forest-overlay-titles">
+                    <h2 class="forest-overlay-title">Projektwald</h2>
+                    <p class="forest-overlay-subtitle">Deine Projekte. Dein Fortschritt. Dein Wald.</p>
+                  </div>
+                  <div class="forest-overlay-actions-slot" id="forest-overlay-actions-slot"></div>
+                </div>
+
+                <div id="forest-toolbar" class="forest-toolbar">
+                  <div class="forest-tabs">
+                    <button class="forest-tab active" id="forest-tab-all" data-tab="all">Alle <span class="forest-tab-count" id="forest-tab-count-all"></span></button>
+                    <button class="forest-tab" id="forest-tab-active" data-tab="active">Aktiv <span class="forest-tab-count" id="forest-tab-count-active"></span></button>
+                    <button class="forest-tab" id="forest-tab-archived" data-tab="archived">Abgeschlossen <span class="forest-tab-count" id="forest-tab-count-archived"></span></button>
+                  </div>
+                  <div class="forest-toolbar-right">
+                    <div class="forest-search-wrap">
+                      <svg class="forest-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                      <input type="text" id="forest-search-input" class="forest-search-input" placeholder="Projekte suchen..." />
+                    </div>
+                    <div class="forest-filter-wrap">
+                      <button class="forest-filter-btn" id="forest-filter-btn" title="Nach Priorität filtern">
+                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2 3h11M4.5 7.5h6M6.5 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                      </button>
+                      <div class="forest-filter-panel hidden" id="forest-filter-panel">
+                        <div class="forest-filter-title">Priorität</div>
+                        <button class="toggle-select-btn active" id="forest-prio-all" data-prio="">Alle</button>
+                        <button class="toggle-select-btn" id="forest-prio-low" data-prio="Niedrig">Niedrig</button>
+                        <button class="toggle-select-btn" id="forest-prio-mid" data-prio="Mittel">Mittel</button>
+                        <button class="toggle-select-btn" id="forest-prio-high" data-prio="Hoch">Hoch</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bäume werden von renderForest() (forest.js) NUR hier hinein
+                   gerendert — Hintergrund/Overlay/Legende bleiben dabei
+                   unangetastet stehen. -->
+              <div id="forest-trees-layer"></div>
+
+              <div class="forest-legend" id="forest-legend">
+                <span class="forest-legend-item"><span class="forest-legend-dot forest-legend-dot--active"></span>Aktives Projekt</span>
+                <span class="forest-legend-item"><span class="forest-legend-dot forest-legend-dot--done"></span>Abgeschlossenes Projekt</span>
+                <span class="forest-legend-item">ⓘ Hover für Infos</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Detailansicht — innerhalb der normalen View, Sidebar bleibt sichtbar -->
           <div id="view-project-detail" style="display:none;">
  
-            <!-- TOOLBAR — schlank, nur Navigation + Edit -->
-            <div class="pdt-toolbar">
-              <button class="pdt-back-btn" id="proj-detail-back">
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M9 3L4 7.5 9 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Zurück zum Wald
-              </button>
-              <div class="pdt-toolbar-right">
-                <button class="pdt-action-btn" id="proj-detail-edit-btn" title="Projekt bearbeiten">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-                  Bearbeiten
-                </button>
-                <button class="pdt-action-btn pdt-menu-btn" id="proj-detail-menu-btn" title="Mehr Optionen">
-                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="3" r="1.2" fill="currentColor"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="7.5" cy="12" r="1.2" fill="currentColor"/></svg>
-                </button>
-                <!-- versteckt aber noch im DOM für JS-Kompatibilität -->
-                <button id="proj-detail-more-branches" style="display:none;"></button>
-                <button id="proj-detail-add-branch" style="display:none;">+ Ast hinzufügen</button>
-              </div>
-            </div>
- 
-            <!-- HERO — großer immersiver Bereich -->
+            <!-- HERO — großer immersiver Bereich; Toolbar liegt als Overlay
+                 direkt auf dem Hintergrundbild (kein eigener Balken mehr,
+                 gleiches Muster wie .forest-overlay-top im Projektwald). -->
             <div class="pdt-hero">
               <!-- Hintergrundbild (optional, wenn vorhanden) -->
               <div class="pdt-hero-bg">
-                <img src="img/landscape.jpg" alt="" class="pdt-landscape" onerror="this.style.display='none'"/>
+                <img src="img/tree.png" alt="" class="pdt-landscape" onerror="this.style.display='none'"/>
                 <div class="pdt-hero-overlay"></div>
+              </div>
+
+              <!-- TOOLBAR — schlank, nur Navigation + Edit -->
+              <div class="pdt-toolbar">
+                <button class="pdt-back-btn" id="proj-detail-back">
+                  <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M9 3L4 7.5 9 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Zurück zum Wald
+                </button>
+                <div class="pdt-toolbar-right">
+                  <button class="pdt-action-btn" id="proj-detail-edit-btn" title="Projekt bearbeiten">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.5l2 2L4 12H2v-2L9.5 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                    Bearbeiten
+                  </button>
+                  <button class="pdt-action-btn pdt-menu-btn" id="proj-detail-menu-btn" title="Mehr Optionen">
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="3" r="1.2" fill="currentColor"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/><circle cx="7.5" cy="12" r="1.2" fill="currentColor"/></svg>
+                  </button>
+                  <!-- versteckt aber noch im DOM für JS-Kompatibilität -->
+                  <button id="proj-detail-more-branches" style="display:none;"></button>
+                  <button id="proj-detail-add-branch" style="display:none;">+ Ast hinzufügen</button>
+                </div>
               </div>
  
               <!-- LINKS: Hauptprojektinfo -->

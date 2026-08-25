@@ -231,12 +231,30 @@
 .proj-view-btn.active { background: var(--surface); color: var(--text); }
 
 /* =========================
-   PROJEKTWALD CONTAINER
+   PROJEKTWALD CONTAINER — Vollbild-Landschaft
+   Das Hintergrundbild (img/forest.png) ersetzt die normale dash-content-
+   Kachel komplett und füllt die gesamte verfügbare Fläche (object-fit:cover,
+   kein aspect-ratio-Lock mehr) — Titel, Tabs, Suche, Filter und Legende
+   liegen als Overlays direkt darauf, statt eigenen Platz oberhalb/unterhalb
+   zu beanspruchen. #project-dash-content bekommt dafür padding:0 und eine
+   feste Höhe (= Rest des Viewports unterhalb von .view), sobald die
+   Waldansicht aktiv ist (Klasse .forest-active, siehe forest.js).
 ========================= */
+.dash-content.forest-active {
+  padding: 0;
+  /* .view hat 28px oben / 16px unten Padding (main.css); der Kartenansicht-
+     Header ist in der Waldansicht komplett ausgeblendet (0px), daher bleibt
+     nur dieses Padding als Rest-Chrome übrig. */
+  height: calc(100vh - 44px);
+  overflow: hidden;
+}
+
+#project-forest-wrap { height: 100%; }
+
 #project-forest {
   position: relative;
   width: 100%;
-  min-height: calc(100vh - 120px);
+  height: 100%;
   overflow: hidden;
   border-radius: var(--radius-lg);
   background: var(--forest-bg);
@@ -246,8 +264,24 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
-.forest-bg svg { width: 100%; height: 100%; }
+.forest-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Baum-Ebene — renderForest() räumt/befüllt NUR diesen Layer, Hintergrund/
+   Overlay/Legende bleiben stehen. Eigener Stacking-Context (z-index:1),
+   damit selbst der z-index:999 eines gehoverten Baums nie über die
+   Overlay-Chrome (z-index:40) hinausragen kann. */
+#forest-trees-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
 
 .forest-empty {
   position: absolute;
@@ -260,53 +294,256 @@
 }
 
 /* BAUM WRAPPER -> project-tree.css */
-/* .forest-tree-wrap, .forest-tree-svg -> project-tree.css */
+/* .forest-tree-wrap, .forest-tree-img, .forest-tree-card -> project-tree.css */
 
-/* .forest-tree-label et al. -> project-tree.css */
+/* =========================
+   WALD-OVERLAY-HEADER — Titel + Aktionen + Toolbar, auf dem Bild liegend
+========================= */
+.forest-overlay-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  z-index: 40;
+}
+
+.forest-overlay-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.forest-overlay-titles { display: flex; flex-direction: column; }
+.forest-overlay-title {
+  font-family: var(--font);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin: 0;
+  text-shadow: 0 1px 3px rgba(255,255,255,0.9), 0 2px 16px rgba(255,255,255,0.7);
+}
+[data-theme-family="dark"] .forest-overlay-title {
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85), 0 2px 16px rgba(0,0,0,0.7);
+}
+.forest-overlay-subtitle {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 2px 0 0;
+  text-shadow: 0 1px 4px rgba(255,255,255,0.85);
+}
+[data-theme-family="dark"] .forest-overlay-subtitle {
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+.forest-overlay-actions-slot { display: flex; gap: 8px; align-items: center; }
+
+/* Reiner Layout-Wrapper — kein gemeinsamer Hintergrundbalken mehr. Jedes
+   Control (Tabs, Suche, Filter-Button) trägt sein eigenes "Glas"-Pill und
+   schwebt einzeln über der Landschaft, statt in einem langen Balken zu
+   stecken. */
+.forest-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.forest-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+.forest-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms;
+}
+[data-theme-family="dark"] .forest-tab { background: rgba(26,24,18,0.82); }
+.forest-tab:hover { color: var(--text); }
+.forest-tab.active { background: var(--sage); color: var(--sage-fg); }
+.forest-tab.active .forest-tab-count { color: var(--sage-fg); opacity: 0.85; }
+.forest-tab-count { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+
+.forest-toolbar-right { display: flex; align-items: center; gap: 10px; }
+
+.forest-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-lg);
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+[data-theme-family="dark"] .forest-search-wrap { background: rgba(26,24,18,0.82); }
+.forest-search-icon { position: absolute; left: 10px; color: var(--text-3); pointer-events: none; }
+.forest-search-input {
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 8px 12px 8px 32px;
+  font-size: 13px;
+  width: 200px;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+}
+
+.forest-filter-wrap { position: relative; }
+.forest-filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-lg);
+  border: none;
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 120ms;
+}
+[data-theme-family="dark"] .forest-filter-btn { background: rgba(26,24,18,0.82); }
+.forest-filter-btn:hover { color: var(--sage); }
+
+.forest-filter-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+.forest-filter-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 0 2px 2px;
+}
+.forest-filter-panel .toggle-select-btn { padding: 6px 10px; font-size: 12.5px; text-align: left; }
+
+/* =========================
+   LEGENDE — Overlay am unteren Bildrand
+========================= */
+.forest-legend {
+  position: absolute;
+  left: 50%; bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100% - 40px);
+  gap: 6px 16px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  font-size: 12px;
+  color: var(--text-2);
+}
+[data-theme-family="dark"] .forest-legend { background: rgba(26,24,18,0.82); }
+.forest-legend-item { display: flex; align-items: center; gap: 6px; }
+.forest-legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.forest-legend-dot--active { background: #16a34a; }
+.forest-legend-dot--done   { background: #d97706; }
 
 /* =========================
    PROJEKT DETAILANSICHT — Neustruktur
 ========================= */
 
-/* Kein overflow im Detailbereich */
-#view-project-detail { width: 100%; }
-/* Wenn Detailansicht aktiv: dash-content kein Padding */
-.dash-content.pdt-active { padding: 0 !important; }
-/* Toolbar behält eigenes Padding */
-.pdt-toolbar { padding: 10px 20px 8px; }
+/* Wenn Detailansicht aktiv: dash-content kein Padding, dafür Spalte über die
+   volle Höhe — Hero (fix ~60vh) oben, Äste & Aufgaben füllt den Rest, statt
+   dass darunter ein leerer Streifen bis zum Kartenrand entsteht. */
+.dash-content.pdt-active {
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 44px);
+}
+#view-project-detail { width: 100%; display: flex; flex-direction: column; flex: 1; }
+.pdt-hero { flex-shrink: 0; }
+.pdt-tasks-section { flex: 1; display: flex; flex-direction: column; }
+
+/* Toolbar liegt als Overlay AUF dem Hero-Hintergrund (kein eigener
+   Balken/Hintergrund mehr) — gleiches Muster wie .forest-overlay-top im
+   Projektwald: Buttons schweben einzeln als Glas-Pills über dem Bild. */
+.pdt-toolbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 3;
+  padding: 16px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
 .pdt-back-btn {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: var(--text-3);
-  background: none; border: none; cursor: pointer;
-  padding: 5px 8px; border-radius: var(--radius-sm);
-  transition: color 120ms, background 120ms;
+  font-size: 13px; font-weight: 500; color: var(--text-2);
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  border: none; cursor: pointer;
+  padding: 7px 12px; border-radius: var(--radius-lg);
+  transition: color 120ms;
 }
-.pdt-back-btn:hover { color: var(--text); background: var(--surface); }
-.pdt-toolbar-right { display: flex; align-items: center; gap: 8px; }
+[data-theme-family="dark"] .pdt-back-btn { background: rgba(26,24,18,0.82); }
+.pdt-back-btn:hover { color: var(--text); }
+.pdt-toolbar-right { display: flex; align-items: center; gap: 10px; }
 .pdt-action-btn {
   display: flex; align-items: center; gap: 6px;
   font-size: 12.5px; color: var(--text-2);
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 5px 12px;
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  border: none;
+  border-radius: var(--radius-lg); padding: 7px 14px;
   cursor: pointer; transition: all 120ms;
 }
-.pdt-action-btn:hover { border-color: var(--border-strong); color: var(--text); }
-.pdt-menu-btn { padding: 5px 10px; }
+[data-theme-family="dark"] .pdt-action-btn { background: rgba(26,24,18,0.82); }
+.pdt-action-btn:hover { color: var(--text); }
+.pdt-menu-btn { padding: 7px 11px; }
 
 /* ── HERO ── */
 .pdt-hero {
   position: relative;
   display: grid;
   grid-template-columns: 28% 44% 28%;
+  align-items: stretch;
+  /* ~3/5 der verfügbaren Bildschirmhöhe — der Bereich darunter
+     (Äste & Aufgaben) bekommt den Rest, siehe #view-project-detail. */
+  height: 60vh;
   min-height: 420px;
-  max-height: 480px;
-  align-items: start;
   overflow: hidden;
   background: linear-gradient(160deg, var(--surface) 0%, var(--bg) 100%);
   border-radius: var(--radius-lg);
   /* Volle verfügbare Breite — kein margin, kein max-width */
   width: 100%;
   box-sizing: border-box;
+  /* Platz für die absolut positionierte Toolbar oben freihalten */
+  padding-top: 58px;
 }
 
 /* Hintergrundbild */
@@ -317,14 +554,13 @@
 }
 .pdt-landscape {
   width: 100%; height: 100%;
-  object-fit: cover; object-position: center 55%;
-  opacity: 0.18; filter: saturate(0.75) blur(0.5px);
+  object-fit: cover; object-position: center 68%;
 }
 .pdt-hero-overlay {
   position: absolute; inset: 0;
   background: linear-gradient(to bottom,
-    rgba(var(--bg-rgb,248,245,240),0.15) 0%,
-    rgba(var(--bg-rgb,248,245,240),0.5) 100%);
+    rgba(var(--bg-rgb,248,245,240),0.05) 0%,
+    rgba(var(--bg-rgb,248,245,240),0.32) 100%);
 }
 
 /* Alle 3 Spalten über dem Hintergrund */
@@ -546,16 +782,10 @@
 .task-cl-row.done .task-cl-label { text-decoration: line-through; color: var(--text-3); }
 
 /* ── WALD ── */
-#project-forest {
-  position: relative; width: 100%;
-  height: calc(100vh - 138px);
-  overflow: hidden; border-radius: var(--radius-lg);
-  background: var(--forest-bg);
-}
+/* #project-forest-Größe -> aspect-ratio-Regel weiter oben in dieser Datei
+   (hält das Seitenverhältnis von img/forest.png ein, siehe Kommentar dort) */
 
-/* .forest-tree-svg -> project-tree.css */
-
-/* .detail-leaf, .detail-apple hover -> project-tree.css */
+/* .forest-tree-img/.forest-tree-card, PNG-Detailbaum + Deko -> project-tree.css */
 
 /* Toggle Buttons */
 .toggle-select-btn {
@@ -569,11 +799,11 @@
    RESPONSIVE
    #project-grid und .pdt-tiles-grid nutzen bereits auto-fill/minmax
    und brauchen keine Breakpoints. Die Hero (28%/44%/28%-Spalten,
-   feste 420–480px Höhe) verträgt sich dagegen nicht mit schmaleren
-   Breiten — die stapeln wir stattdessen.
+   ~60vh Höhe) verträgt sich dagegen nicht mit schmaleren Breiten — die
+   stapeln wir stattdessen (Höhe dann content-getrieben statt 60vh).
 ============================================================= */
 @media (max-width: 1024px) {
-  .pdt-hero { grid-template-columns: 1fr; min-height: 0; max-height: none; }
+  .pdt-hero { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .pdt-left { padding: 22px 24px 8px; }
   .pdt-project-name { font-size: 38px; }
   .pdt-tree-col { min-height: 260px; padding-top: 0; }

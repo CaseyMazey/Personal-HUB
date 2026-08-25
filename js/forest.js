@@ -3,161 +3,308 @@
 // =========================
 
 let forestView    = DB.get('projectForestView', false);
-let treeLayouts   = DB.get('treeLayouts', {}); // stabile Baumstrukturen je Projekt-ID
+
+// Wald-Übersicht: Tab/Such/Prioritäts-Filter — reiner Anzeigefilter,
+// beeinflusst weder Archivstatus noch Projektdaten. Bewusst nicht in DB
+// persistiert (Ansichtsfilter, kein Projektzustand).
+let forestFilterTab      = 'all';   // 'all' | 'active' | 'archived'
+let forestSearchQuery    = '';
+let forestPriorityFilter = '';      // '' | 'Niedrig' | 'Mittel' | 'Hoch'
 
 // =================================================
 // BAUMRENDERING -> ausgelagert in project-tree.js
 // Verfuegbare Funktionen:
-//   drawTree(project, size)                    -> SVG-String (Waldbaum klein)
-//   drawDetailTree(project, W, H, layerStart)  -> SVG-String (Detailbaum gross)
-//   updateDetailTreeElements(project)          -> aktualisiert Blaetter/Aepfel
+//   updateDetailTreeElements(project)  -> rendert den PNG-Baum + Äpfel/Blüten
+//                                          in #proj-detail-tree
+//   getOrAssignTreeVariant(project)    -> 1..TREE_PNG_COUNT, dieselbe Variante
+//                                          wie im Projektwald (buildForestTree())
+// Sowohl der kleine Waldbaum als auch der große Detailbaum sind PNGs
+// (img/tree_<n>.png / tree_<n>_fall.png) — keine generierte SVG-Baumstruktur
+// mehr.
 // =================================================
 
 
 // =========================
-// WALD HINTERGRUND
+// WALD-POSITIONEN (fest vordefinierte Tiefenebenen, nach Skizze)
+// Erst Position, dann Größe: jedes Projekt wird zuerst einer festen Reihe
+// (Tiefenebene) zugeordnet; Reihe -> Y-Position + horizontaler Baumabstand
+// innerhalb der Reihe; daraus abgeleitet erst die Skalierung. Keine
+// Zufallspositionen — die Reihen sind bewusst als feste, deterministische
+// Perspektivebenen angelegt (hinten klein & eng, vorne groß & weit
+// auseinander), damit die Waldansicht kontrolliert/konsistent bleibt.
 // =========================
-function getForestBackground() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
-  <defs>
-    <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8ede4" stop-opacity="0.5"/><stop offset="100%" stop-color="#d4dbc8" stop-opacity="0.3"/></linearGradient>
-    <linearGradient id="hillG1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b8c9a3" stop-opacity="0.35"/><stop offset="100%" stop-color="#a0b88a" stop-opacity="0.2"/></linearGradient>
-    <linearGradient id="groundG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c4d4a8" stop-opacity="0.4"/><stop offset="100%" stop-color="#b0c090" stop-opacity="0.25"/></linearGradient>
-  </defs>
-  <rect width="1200" height="700" fill="url(#skyG)"/>
-  <ellipse cx="250" cy="520" rx="380" ry="180" fill="url(#hillG1)"/>
-  <ellipse cx="750" cy="540" rx="420" ry="160" fill="url(#hillG1)"/>
-  <ellipse cx="1100" cy="530" rx="300" ry="150" fill="url(#hillG1)"/>
-  <path d="M0 480 Q150 360 300 420 Q450 360 600 400 Q750 340 900 390 Q1050 340 1200 380 L1200 700 L0 700Z" fill="#c8d4b4" opacity="0.18"/>
-  <path d="M0 600 Q300 580 600 590 Q900 600 1200 585 L1200 700 L0 700Z" fill="url(#groundG)"/>
-  <path d="M480 700 Q520 640 540 590 Q560 540 580 500" stroke="#c8bb96" stroke-width="28" fill="none" opacity="0.22" stroke-linecap="round"/>
-  <path d="M480 700 Q520 640 540 590 Q560 540 580 500" stroke="#d4c8a0" stroke-width="14" fill="none" opacity="0.18" stroke-linecap="round"/>
-  <path d="M0 630 Q200 618 400 625 Q600 612 800 620 Q1000 610 1200 616 L1200 700 L0 700Z" fill="#b8cc98" opacity="0.22"/>
-  <ellipse cx="80" cy="615" rx="45" ry="25" fill="#8aab72" opacity="0.22"/>
-  <ellipse cx="110" cy="608" rx="35" ry="20" fill="#9abb82" opacity="0.2"/>
-  <ellipse cx="1100" cy="618" rx="50" ry="26" fill="#8aab72" opacity="0.2"/>
-  <ellipse cx="380" cy="625" rx="30" ry="16" fill="#8aab72" opacity="0.17"/>
-  <ellipse cx="820" cy="622" rx="28" ry="15" fill="#9abb82" opacity="0.16"/>
-  <ellipse cx="200" cy="638" rx="12" ry="6" fill="#b0b09a" opacity="0.2"/>
-  <ellipse cx="900" cy="642" rx="9" ry="5" fill="#b0b09a" opacity="0.18"/>
-  <circle cx="160" cy="630" r="4" fill="#f0d080" opacity="0.3"/>
-  <circle cx="960" cy="632" r="4" fill="#f0d080" opacity="0.28"/>
-  <circle cx="720" cy="635" r="4" fill="#f0e080" opacity="0.25"/>
-  <rect x="280" y="618" width="22" height="14" rx="3" fill="#8a6a42" opacity="0.18"/>
-  <ellipse cx="291" cy="618" rx="11" ry="5" fill="#a07a52" opacity="0.18"/>
-  <path d="M0 660 Q200 650 400 658 Q500 662 600 660" stroke="#a8c4d8" stroke-width="6" fill="none" opacity="0.15" stroke-linecap="round"/>
-</svg>`;
+const FOREST_ROW_COUNTS = [3, 4, 3, 4]; // hinterste -> vorderste Reihe
+
+function generateForestSlots(rowCounts) {
+  // minY/maxY sind die Top-Kante des jeweils *größten* (untersten) bzw.
+  // *kleinsten* (obersten) Baums. #project-forest hat overflow:hidden, daher
+  // muss maxY so gewählt sein, dass Bild + Karte der untersten (größten,
+  // am stärksten skalierten) Reihe noch komplett vor dem unteren Rand/der
+  // Legende endet.
+  const minY = 18, maxY = 66;
+  const rows = rowCounts.length;
+
+  // Je Tiefe (0 = hinterste Reihe, 1 = vorderste Reihe):
+  //  - scale: kleinste -> größte Baumgröße
+  //  - gap:   Abstand zwischen benachbarten Baummitten einer Reihe, in %
+  //           Containerbreite. Wächst linear mit der Tiefe -> die vorderste
+  //           Reihe wird NICHT gleichmäßig über die volle Breite verteilt,
+  //           sondern bekommt bewusst die größten Lücken (viel sichtbare
+  //           Landschaft zwischen den Vordergrundbäumen), während hintere
+  //           Reihen enger zusammenrücken.
+  const SCALE_MIN = 0.75, SCALE_MAX = 1.5;
+  // GAP_MIN etwas größer als zuvor (an die um 10% größeren Bäume angepasst).
+  // GAP_MAX ist NICHT einfach proportional mitgewachsen: bei 4 Bäumen in der
+  // vordersten (größten) Reihe würde das den äußersten Baum über den Rand
+  // von #project-forest hinausschieben (abgeschnitten). 27 ist der größte
+  // Wert, bei dem der äußerste Vordergrundbaum bei aktueller Skalierung noch
+  // vollständig im Container sichtbar bleibt.
+  const GAP_MIN    = 22, GAP_MAX   = 27;
+  const CENTER_X   = 50;
+
+  const slots = [];
+  rowCounts.forEach((count, rowIdx) => {
+    const depth = rows === 1 ? 1 : rowIdx / (rows - 1);
+    const y     = rows === 1 ? minY : minY + rowIdx * (maxY - minY) / (rows - 1);
+    const scale = SCALE_MIN + depth * (SCALE_MAX - SCALE_MIN);
+    const gap   = GAP_MIN   + depth * (GAP_MAX   - GAP_MIN);
+
+    // Reihe um die Mitte zentrieren, Bäume im festen Abstand `gap` daneben
+    // aufreihen -> ergibt zusammen mit dem wachsenden Abstand von selbst
+    // das versetzte (Quincunx-artige) Muster der Skizze, ganz ohne Zufall.
+    const rowSpan = (count - 1) * gap;
+    const startX  = CENTER_X - rowSpan / 2;
+    for (let col = 0; col < count; col++) {
+      const x = startX + col * gap;
+      slots.push({ x, y, depth, scale });
+    }
+  });
+  return slots;
+}
+
+const FOREST_SLOTS = generateForestSlots(FOREST_ROW_COUNTS);
+
+function getForestSlotForProject(project) {
+  const idx   = Math.max(0, projects.findIndex(p => p.id === project.id));
+  const slot  = FOREST_SLOTS[idx % FOREST_SLOTS.length];
+  const cycle = Math.floor(idx / FOREST_SLOTS.length);
+  return cycle === 0 ? slot : { ...slot, y: Math.min(92, slot.y + cycle * 3) };
+}
+
+// =========================
+// FILTER / TABS / SUCHE
+// =========================
+function getFilteredForestProjects() {
+  return projects.filter(p => {
+    if (forestFilterTab === 'active'   && p.archived)  return false;
+    if (forestFilterTab === 'archived' && !p.archived) return false;
+    if (forestPriorityFilter && (p.priority || 'Mittel') !== forestPriorityFilter) return false;
+    if (forestSearchQuery && !p.name.toLowerCase().includes(forestSearchQuery)) return false;
+    return true;
+  });
+}
+
+function updateForestTabCounts() {
+  const elAll      = document.getElementById('forest-tab-count-all');
+  const elActive   = document.getElementById('forest-tab-count-active');
+  const elArchived = document.getElementById('forest-tab-count-archived');
+  if (elAll)      elAll.textContent      = `(${projects.length})`;
+  if (elActive)   elActive.textContent   = `(${projects.filter(p => !p.archived).length})`;
+  if (elArchived) elArchived.textContent = `(${projects.filter(p =>  p.archived).length})`;
+}
+
+function setForestTab(tab) {
+  forestFilterTab = tab;
+  ['all', 'active', 'archived'].forEach(t => {
+    const btn = document.getElementById(`forest-tab-${t}`);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  renderForest();
+}
+
+document.getElementById('forest-tab-all')?.addEventListener('click', () => setForestTab('all'));
+document.getElementById('forest-tab-active')?.addEventListener('click', () => setForestTab('active'));
+document.getElementById('forest-tab-archived')?.addEventListener('click', () => setForestTab('archived'));
+
+document.getElementById('forest-search-input')?.addEventListener('input', e => {
+  forestSearchQuery = e.target.value.trim().toLowerCase();
+  renderForest();
+});
+
+document.getElementById('forest-filter-btn')?.addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('forest-filter-panel')?.classList.toggle('hidden');
+});
+document.addEventListener('click', e => {
+  const panel = document.getElementById('forest-filter-panel');
+  const btn   = document.getElementById('forest-filter-btn');
+  if (panel && !panel.classList.contains('hidden') && !panel.contains(e.target) && e.target !== btn) {
+    panel.classList.add('hidden');
+  }
+});
+document.querySelectorAll('#forest-filter-panel [data-prio]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    forestPriorityFilter = btn.dataset.prio;
+    document.querySelectorAll('#forest-filter-panel [data-prio]').forEach(b => b.classList.toggle('active', b === btn));
+    renderForest();
+  });
+});
+
+// =========================
+// WALDBAUM-KARTE (PNG-Baum + Projektkarte)
+// =========================
+function buildForestTree(project, slot, containerWidth) {
+  const stats      = getProjectStats(project);
+  const totalTasks = stats.coreTasks.length + stats.subTotal;
+  const doneTasks  = stats.coreDone + stats.subDone;
+  const pct        = totalTasks === 0 ? 0 : Math.round(doneTasks / totalTasks * 100);
+  const isDone     = !!project.archived;
+  const variant    = getOrAssignTreeVariant(project);
+  const season     = isDone ? '_fall' : '';
+  const primarySrc  = `img/tree_${variant}${season}.png`;
+  const fallbackSrc = `img/tree_1${season}.png`;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'forest-tree-wrap' + (isDone ? ' archived' : '');
+  // Baumgröße relativ zur tatsächlichen Container-Breite (nicht fix in px) —
+  // #project-forest kann je nach Viewport-Höhe schrumpfen (siehe projects.css),
+  // die Bäume sollen dabei proportional mitschrumpfen statt zu überlappen.
+  const widthPx = Math.round(containerWidth * 0.1132 * slot.scale);
+  wrap.style.cssText = `left:${slot.x}%;top:${slot.y}%;width:${widthPx}px;z-index:${10 + Math.round(slot.depth * 40)};`;
+
+  const img = document.createElement('img');
+  img.className = 'forest-tree-img';
+  img.src = primarySrc;
+  img.alt = project.name;
+  img.draggable = false;
+  img.addEventListener('error', () => {
+    if (!img.src.endsWith(fallbackSrc)) img.src = fallbackSrc;
+  }, { once: true });
+
+  const dot = document.createElement('span');
+  dot.className = 'forest-tree-dot';
+  dot.style.background = isDone ? '#d97706' : '#16a34a';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'forest-tree-name';
+  nameEl.textContent = project.name;
+
+  const topRow = document.createElement('div');
+  topRow.className = 'forest-tree-card-top';
+  topRow.append(dot, nameEl);
+
+  const bar = document.createElement('div');
+  bar.className = 'forest-tree-bar';
+  const fill = document.createElement('div');
+  fill.className = 'forest-tree-bar-fill';
+  fill.style.cssText = `width:${pct}%;background:${isDone ? '#d97706' : (project.color || '#4a7c59')};`;
+  bar.appendChild(fill);
+
+  const pctLabel = document.createElement('span');
+  pctLabel.className = 'forest-tree-pct';
+  pctLabel.textContent = `${pct}%`;
+
+  const progressRow = document.createElement('div');
+  progressRow.className = 'forest-tree-progress';
+  progressRow.append(bar, pctLabel);
+
+  const card = document.createElement('div');
+  card.className = 'forest-tree-card';
+  card.append(topRow, progressRow);
+
+  const subCount = (project.subprojects || []).length;
+  const hoverInfo = document.createElement('div');
+  hoverInfo.className = 'forest-tree-hover-info';
+  hoverInfo.innerHTML = `
+    <strong>${escapeXml(project.name)}</strong>
+    <span>${doneTasks} / ${totalTasks} Aufgaben · ${pct}%</span>
+    <span>${subCount} Unterprojekt${subCount === 1 ? '' : 'e'}</span>
+  `;
+
+  wrap.append(img, card, hoverInfo);
+  wrap.addEventListener('click', () => openProjectDetail(project.id));
+
+  return wrap;
 }
 
 // =========================
 // WALD RENDERN
+// Rendert NUR in #forest-trees-layer — Hintergrundbild, Overlay-Header
+// (Titel/Tabs/Suche/Filter) und Legende sind statisches HTML und bleiben
+// beim Neurendern unangetastet stehen.
 // =========================
 function renderForest() {
   const container = document.getElementById('project-forest');
-  if (!container) return;
-  container.innerHTML = '';
+  const layer     = document.getElementById('forest-trees-layer');
+  if (!container || !layer) return;
+  layer.innerHTML = '';
 
-  const bgWrap = document.createElement('div');
-  bgWrap.className = 'forest-bg';
-  bgWrap.innerHTML = getForestBackground();
-  container.appendChild(bgWrap);
+  updateForestTabCounts();
 
-  const allProjects = projects;
-  if (allProjects.length === 0) {
+  if (projects.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'forest-empty';
     empty.textContent = 'Dein Wald ist noch leer. Erstelle dein erstes Projekt.';
-    container.appendChild(empty);
+    layer.appendChild(empty);
     return;
   }
 
-  const cols     = Math.min(allProjects.length, 4);
-  const rows     = Math.ceil(allProjects.length / cols);
-  const treeSize = Math.min(180, Math.max(120, Math.floor(container.clientWidth / (cols + 0.5))));
+  const filtered = getFilteredForestProjects();
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'forest-empty';
+    empty.textContent = 'Keine Projekte gefunden.';
+    layer.appendChild(empty);
+    return;
+  }
 
-  allProjects.forEach((project, i) => {
-    const col  = i % cols;
-    const row  = Math.floor(i / cols);
-    const rng  = seededRand(idToSeed(project.id) + 42);
-
-    const jitterX = (rng() - 0.5) * 40;
-    const jitterY = (rng() - 0.5) * 20;
-    const colW    = 100 / cols;
-    const xPct    = colW * col + colW / 2 + jitterX / 12;
-    const yBase   = 25 + row * (55 / Math.max(rows, 1));
-    const yPct    = Math.min(78, yBase + jitterY / 8);
-
-    const wrap = document.createElement('div');
-    wrap.className = 'forest-tree-wrap' + (project.archived ? ' archived' : '');
-    wrap.style.cssText = `left:${xPct}%;top:${yPct}%;width:${treeSize}px;`;
-
-    const svgWrap = document.createElement('div');
-    svgWrap.className = 'forest-tree-svg';
-    svgWrap.innerHTML = drawTree(project, treeSize);
-
-    const allTasks = (project.subprojects || []).flatMap(sp => sp.tasks || []);
-    const total    = allTasks.length;
-    const done     = allTasks.filter(t => t.done).length;
-    const pct      = total === 0 ? 0 : Math.round(done / total * 100);
-
-    const statusDot = document.createElement('span');
-    statusDot.className = 'forest-tree-dot';
-    statusDot.style.background = project.archived ? '#d97706' : (pct === 100 ? '#16a34a' : (project.color || '#4a7c59'));
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'forest-tree-name';
-    nameEl.textContent = project.name;
-
-    const labelTop = document.createElement('div');
-    labelTop.style.cssText = 'display:flex;align-items:center;gap:4px;';
-    labelTop.append(statusDot, nameEl);
-
-    const bar = document.createElement('div');
-    bar.className = 'forest-tree-bar';
-    const fill = document.createElement('div');
-    fill.className = 'forest-tree-bar-fill';
-    fill.style.cssText = `width:${pct}%;background:${project.archived ? '#d97706' : (project.color || '#4a7c59')};`;
-    bar.appendChild(fill);
-    const pctLabel = document.createElement('span');
-    pctLabel.className = 'forest-tree-pct';
-    pctLabel.textContent = `${pct}%`;
-
-    const progressRow = document.createElement('div');
-    progressRow.className = 'forest-tree-progress';
-    progressRow.append(bar, pctLabel);
-
-    const labelBox = document.createElement('div');
-    labelBox.className = 'forest-tree-label';
-    labelBox.append(labelTop, progressRow);
-
-    wrap.append(svgWrap, labelBox);
-    wrap.addEventListener('click', () => openProjectDetail(project.id));
-
-    container.appendChild(wrap);
+  const containerWidth = container.clientWidth || 1200;
+  filtered.forEach(project => {
+    const slot = getForestSlotForProject(project);
+    layer.appendChild(buildForestTree(project, slot, containerWidth));
   });
 }
 
 // =========================
 // TOGGLE LOGIK
+// #project-header-actions (View-Umschalter/Archiv/+Neues Projekt) wird
+// zwischen dem normalen Kartenansicht-Header und dem Wald-Overlay-Header
+// umgehängt statt dupliziert — gleiches Muster wie Positivity/Countdowns
+// zwischen #sidebar und #view-mehr (siehe main.js).
 // =========================
 function switchToCardView() {
   forestView = false;
   DB.set('projectForestView', false);
-  document.getElementById('project-grid').style.display   = '';
-  document.getElementById('project-forest').style.display = 'none';
+
+  const actions = document.getElementById('project-header-actions');
+  const plainHeader = document.getElementById('project-plain-header');
+  if (actions && plainHeader && actions.parentElement !== plainHeader) plainHeader.appendChild(actions);
+
+  document.getElementById('project-grid').style.display        = '';
+  document.getElementById('project-forest-wrap').style.display = 'none';
   document.getElementById('view-project-detail').style.display = 'none';
   document.getElementById('proj-view-cards').classList.add('active');
   document.getElementById('proj-view-forest').classList.remove('active');
+  plainHeader.style.display = '';
+  document.getElementById('project-dash-content').classList.remove('forest-active');
 }
 
 function switchToForestView() {
   forestView = true;
   DB.set('projectForestView', true);
-  document.getElementById('project-grid').style.display   = 'none';
-  document.getElementById('project-forest').style.display = '';
+
+  const actions    = document.getElementById('project-header-actions');
+  const forestSlot = document.getElementById('forest-overlay-actions-slot');
+  if (actions && forestSlot && actions.parentElement !== forestSlot) forestSlot.appendChild(actions);
+
+  document.getElementById('project-grid').style.display        = 'none';
+  document.getElementById('project-forest-wrap').style.display = '';
   document.getElementById('view-project-detail').style.display = 'none';
+  document.getElementById('forest-toolbar').style.display      = '';
   document.getElementById('proj-view-cards').classList.remove('active');
   document.getElementById('proj-view-forest').classList.add('active');
+  document.getElementById('project-plain-header').style.display = 'none';
+  document.getElementById('project-dash-content').classList.add('forest-active');
   renderForest();
 }
 
@@ -180,10 +327,16 @@ function openProjectDetail(projectId) {
   const vh = document.querySelector('#view-projects > .view-header');
   if (vh) vh.style.display = 'none';
   const dc = document.querySelector('#view-projects .dash-content');
-  if (dc) dc.classList.add('pdt-active');
+  // forest-active bringt eine feste height:calc(100vh-44px)+overflow:hidden
+  // mit (siehe .dash-content.forest-active in projects.css) — die darf beim
+  // Wechsel in die Detailansicht nicht mehr aktiv sein, sonst wird
+  // #view-project-detail auf diese Höhe geklemmt (leerer Streifen unten,
+  // wenn der Inhalt kürzer ist, oder Abschneiden, wenn er länger ist).
+  if (dc) { dc.classList.remove('forest-active'); dc.classList.add('pdt-active'); }
+  document.getElementById('forest-toolbar').style.display = 'none';
 
-  document.getElementById('project-grid').style.display   = 'none';
-  document.getElementById('project-forest').style.display = 'none';
+  document.getElementById('project-grid').style.display        = 'none';
+  document.getElementById('project-forest-wrap').style.display = 'none';
   document.getElementById('view-project-detail').style.display = '';
 
   renderProjectDetail();
@@ -229,26 +382,8 @@ function renderProjectDetail() {
   const subValEl = document.getElementById('proj-detail-sub-val');
   if (subValEl) subValEl.textContent = p.subprojects.length;
 
-  // Baum
-  const treeContainer = document.getElementById('proj-detail-tree');
-  const W = 520, H = 480;
-  treeContainer.style.width  = W + 'px';
-  treeContainer.style.height = H + 'px';
-  treeContainer.innerHTML = drawDetailTree(p, W, H, detailSubLayer * 7);
-
-  // Interaktion: Klick auf Blätter/Äpfel
-  treeContainer.querySelectorAll('.detail-leaf, .detail-apple').forEach(el => {
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      const taskId = el.dataset.taskId;
-      const spId   = el.dataset.spId;
-      const sp     = p.subprojects.find(s => s.id === spId);
-      if (!sp) return;
-      const task   = sp.tasks.find(t => t.id === taskId);
-      if (!task) return;
-      openTaskDetail(task, sp, p);
-    });
-  });
+  // Baum (PNG, dieselbe Variante wie im Projektwald) + Äpfel/Blüten-Deko
+  updateDetailTreeElements(p);
 
   // Mehr-Äste-Button
   const moreBtn = document.getElementById('proj-detail-more-branches');
@@ -485,3 +620,77 @@ const _editBtn = document.getElementById('proj-detail-edit-btn');
 if (_editBtn) _editBtn.addEventListener('click', () => {
   if (currentDetailProject) openProjectModal(currentDetailProject);
 });
+
+// =========================
+// DETAIL-MENÜ (⋮) — Bearbeiten + Projekt beenden/reaktivieren (Herbstmodus)
+// Gleiches Dropdown-Muster wie budget.js (.b-header-dropdown): an <body>
+// angehängt (fixed), damit es nicht von umgebenden Containern abgeschnitten wird.
+// =========================
+let pdtMenuEl = null;
+function getPdtMenuEl() {
+  if (!pdtMenuEl) {
+    pdtMenuEl = document.createElement('div');
+    pdtMenuEl.className = 'b-header-dropdown';
+    document.body.appendChild(pdtMenuEl);
+  }
+  return pdtMenuEl;
+}
+function closePdtMenu() {
+  if (pdtMenuEl) pdtMenuEl.classList.remove('open');
+}
+document.addEventListener('click', closePdtMenu);
+document.addEventListener('scroll', closePdtMenu, true);
+window.addEventListener('resize', closePdtMenu);
+
+const pdtMenuBtn = document.getElementById('proj-detail-menu-btn');
+if (pdtMenuBtn) {
+  pdtMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = getPdtMenuEl();
+    const wasOpen = menu.classList.contains('open');
+    closePdtMenu();
+    if (wasOpen || !currentDetailProject) return;
+
+    const p = currentDetailProject;
+    const finishLabel = p.archived ? '↩ Projekt reaktivieren' : '🍂 Projekt beenden (Herbstmodus)';
+    menu.innerHTML = `
+      <button type="button" class="b-header-dropdown-item" id="pdt-menu-edit">✏️ Bearbeiten</button>
+      <button type="button" class="b-header-dropdown-item" id="pdt-menu-finish">${finishLabel}</button>
+    `;
+    const rect = pdtMenuBtn.getBoundingClientRect();
+    menu.style.top   = (rect.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    menu.classList.add('open');
+
+    document.getElementById('pdt-menu-edit').addEventListener('click', () => {
+      closePdtMenu();
+      if (currentDetailProject) openProjectModal(currentDetailProject);
+    });
+    document.getElementById('pdt-menu-finish').addEventListener('click', () => {
+      closePdtMenu();
+      if (!currentDetailProject) return;
+      const project = currentDetailProject;
+
+      if (project.archived) {
+        const idx = projects.findIndex(pr => pr.id === project.id);
+        if (idx !== -1) projects[idx].archived = false;
+        saveProjects();
+        renderProjectDetail();
+        return;
+      }
+
+      openConfirmModal(
+        'Projekt beenden?',
+        `„${project.name}" wird in den Herbstmodus versetzt (abgeschlossen). Es bleibt vollständig erhalten und kann jederzeit reaktiviert werden.`,
+        'Beenden',
+        'neutral',
+        () => {
+          const idx = projects.findIndex(pr => pr.id === project.id);
+          if (idx !== -1) projects[idx].archived = true;
+          saveProjects();
+          renderProjectDetail();
+        }
+      );
+    });
+  });
+}
