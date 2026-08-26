@@ -251,11 +251,84 @@
 .gd-col-names { font-size: 12px; color: var(--text-3); line-height: 1.6; }
 .gd-empty { font-size: 12px; color: var(--text-3); line-height: 1.5; }
 
-/* Wochenplan-Modal */
-.gd-modal-week-nav { display: flex; align-items: center; justify-content: center; gap: 14px; }
-#gd-modal-week-label { font-size: 13px; font-family: var(--mono); color: var(--text-2); min-width: 110px; text-align: center; }
-.gd-trio { display: flex; gap: 8px; }
-.gd-trio .modal-input { min-width: 0; }
+/* Kachel-Kopf: Wochen-Navigation (reine Lese-Navigation, kein Modal mehr) */
+.gd-week-nav { display: flex; align-items: center; gap: 6px; }
+#gd-week-nav-label { font-size: 12px; font-family: var(--mono); color: var(--text-2); min-width: 78px; text-align: center; }
+
+/* Kachel: einzelne Pflicht-Zeile (Regulär + Ersatz) */
+.gd-col-ersatz { color: var(--text-3); font-size: 11px; margin-top: 2px; }
+
+/* =========================
+   PFLICHTEN VERWALTEN — Übersichts-Modal
+========================= */
+.gd-overview-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.gd-overview-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.gd-overview-icon { font-size: 18px; flex-shrink: 0; }
+.gd-overview-info { flex: 1; min-width: 0; }
+.gd-overview-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.gd-overview-meta { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+.gd-overview-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.gd-overview-empty { font-size: 13px; color: var(--text-3); padding: 10px 2px; }
+
+/* =========================
+   PFLICHT-EDITOR — Section-Tabs (gleiche Umschalt-Technik wie der
+   Sparplan-Wizard: JS togglet .hidden, hier nur die Optik)
+========================= */
+.gd-section-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  background: var(--surface-2); border-radius: var(--radius-md); padding: 4px;
+}
+.gd-section-tab {
+  flex: 1; min-width: 0;
+  font-size: 12px; font-weight: 600; color: var(--text-3);
+  background: none; border: none; border-radius: var(--radius-sm);
+  padding: 7px 6px; cursor: pointer; white-space: nowrap;
+  transition: all 120ms;
+}
+.gd-section-tab:hover { color: var(--text-2); }
+.gd-section-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-xs); }
+.gd-duty-section { display: flex; flex-direction: column; gap: 14px; }
+
+/* Chip-Auswahl (Personen/Gruppen an-/abwählen) */
+.gd-chip-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.gd-chip-picker:empty::after { content: 'Noch nichts angelegt.'; font-size: 12px; color: var(--text-3); font-style: italic; }
+.gd-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12.5px; color: var(--text-2);
+  background: var(--surface-2); border: 1.5px solid var(--border);
+  border-radius: 99px; padding: 5px 12px; cursor: pointer;
+  transition: all 120ms;
+}
+.gd-chip:hover { border-color: var(--border-strong); }
+.gd-chip.active { background: var(--sage,#5a9467); color: var(--sage-fg); border-color: var(--sage,#5a9467); }
+.gd-chip-remove { font-size: 11px; opacity: 0.7; margin-left: 2px; }
+.gd-chip-remove:hover { opacity: 1; }
+
+.gd-inline-add { display: flex; gap: 6px; margin-top: 8px; }
+.gd-inline-add .modal-input { flex: 1; }
+.gd-new-group-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius-md); }
+
+.gd-participants-overview { display: flex; flex-wrap: wrap; gap: 6px; }
+.gd-participants-overview:empty::after { content: 'Noch keine Teilnehmer ausgewählt.'; font-size: 12px; color: var(--text-3); font-style: italic; }
+
+/* Feste Reihenfolge — sortierbare Liste, Auf/Ab-Buttons (gleiches Muster
+   wie die Pinnwand-Kartenreihenfolge) */
+.gd-order-list { display: flex; flex-direction: column; gap: 6px; }
+.gd-order-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); font-size: 12.5px; color: var(--text);
+}
+.gd-order-row-label { flex: 1; min-width: 0; }
+.gd-order-row-btns { display: flex; gap: 4px; flex-shrink: 0; }
+
+/* Verknüpfte Pflichten */
+.gd-links-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.gd-links-summary { font-size: 12.5px; color: var(--text-2); }
 
 /* =========================
    TASK-LIST — Layout-Bug-Fix
