@@ -1029,7 +1029,6 @@ ul { list-style: none; }
 .countdown-row-days,
 .b-garden-dd-pct,
 .cal-birthday-date,
-.subproject-progress,
 .detail-tile-meta,
 .mini-cal-event-date,
 .cal-day-ev-time,
@@ -1042,7 +1041,6 @@ ul { list-style: none; }
 }
 .b-garden-dd-pct,
 .cal-birthday-date,
-.subproject-progress,
 .detail-tile-meta,
 .mini-cal-event-date {
   flex-shrink: 0;

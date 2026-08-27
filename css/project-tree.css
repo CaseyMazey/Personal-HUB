@@ -139,21 +139,42 @@
    DETAILBAUM-SPALTE (PNG-Baum, dieselbe Variante wie im Projektwald)
 ========================= */
 .pdt-tree-col {
+  /* Absolut über die GESAMTE Hero gelegt (nicht die 44%-Grid-Spalte) —
+     dadurch zentriert sich der Baum immer exakt auf 50% der kompletten
+     Baumkachel inkl. Projektinfos-Spalte, unabhängig von deren tatsächlich
+     gerenderter Breite (Grid-Tracks können durch Inhalt/min-content breiter
+     werden als ihr %-Wert). .pdt-left/.pdt-info-card bekommen dafür feste
+     grid-column-Plätze (siehe projects.css), da sie durch das Herausnehmen
+     der Baumspalte aus dem Grid-Fluss sonst nachrücken würden. Rein
+     dekorativ (Baum + Deko haben pointer-events:none) -> Klicks auf
+     Projektinfos/Textbereich bleiben unangetastet.
+  */
+  position: absolute;
+  inset: 0;
   display: flex;
-  /* Baum mittig im tatsächlich sichtbaren, freien Bereich DIESER Spalte
-     zentrieren (nicht relativ zur ganzen Hero inkl. Projektinfos rechts) —
-     .pdt-hero hat align-items:stretch, die Spalte nutzt also die volle
-     Hero-Höhe für die Zentrierung. */
-  align-items: center;
+  /* stretch statt flex-end: .pdt-tree-wrap füllt dadurch die volle
+     Hero-Höhe, der Baum berührt oben UND unten den Rand — die Bildhöhe
+     bestimmt jetzt die Größe (siehe .pdt-tree-img height:100%), nicht mehr
+     eine feste Breite. */
+  align-items: stretch;
   justify-content: center;
   overflow: visible;
+  pointer-events: none;
 }
-#proj-detail-tree { display: block; }
+/* display:contents "entpackt" den Container — ohne eigene Box entsteht keine
+   Zirkelabhängigkeit mit .pdt-tree-wraps prozentualer Breite (sonst müsste
+   der Browser #proj-detail-tree contentbasiert auf sein Kind sizen, während
+   das Kind gleichzeitig prozentual von #proj-detail-tree abhängt — Ergebnis
+   war eine deutlich zu breite, nicht auf den Baum geschrumpfte Box, wodurch
+   justify-content:center in .pdt-tree-col effektiv nicht mehr den Baum
+   zentrierte). .pdt-tree-wrap wird dadurch direktes Flex-Kind von
+   .pdt-tree-col. */
+#proj-detail-tree { display: contents; }
 
-.pdt-tree-wrap { position: relative; width: min(450px, 85%); }
+.pdt-tree-wrap { position: relative; height: 100%; }
 .pdt-tree-img {
-  width: 100%;
-  height: auto;
+  height: 100%;
+  width: auto;
   display: block;
   pointer-events: none;
   filter: drop-shadow(0 16px 16px rgba(30,25,10,0.25));

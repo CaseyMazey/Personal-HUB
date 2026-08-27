@@ -99,7 +99,7 @@ function updateDetailTreeElements(p) {
   const primarySrc  = `img/tree_${variant}${season}.png`;
   const fallbackSrc = `img/tree_1${season}.png`;
 
-  const allTasks  = (p.subprojects || []).flatMap(sp => sp.tasks || []);
+  const allTasks  = [...(p.tasks || []), ...(p.subprojects || []).flatMap(sp => sp.tasks || [])];
   const coreDone   = Math.min(allTasks.filter(t => t.done && !t.isExtra).length, DECOR_MAX);
   const extraDone  = Math.min(allTasks.filter(t => t.done &&  t.isExtra).length, DECOR_MAX);
 
@@ -115,14 +115,7 @@ function updateDetailTreeElements(p) {
       <div class="pdt-tree-decor">${decor}</div>
     </div>
   `;
-
-  // Fortschritt updaten
-  const done = allTasks.filter(t => t.done).length;
-  const pct  = allTasks.length === 0 ? 0 : Math.round(done/allTasks.length*100);
-  const pctEl   = document.getElementById('proj-detail-pct');
-  const barEl   = document.getElementById('proj-detail-bar-fill');
-  const countEl = document.getElementById('proj-detail-task-count');
-  if (pctEl)   pctEl.textContent   = pct + '%';
-  if (barEl)   barEl.style.cssText = `width:${pct}%;background:${p.color||'#4a7c59'};`;
-  if (countEl) countEl.textContent = `${done} / ${allTasks.length} Aufgaben`;
+  // Fortschritt (Prozent/Balken/Zähler) wird NICHT hier geschrieben — alleinige
+  // Quelle ist renderProjectDetail() in forest.js via getProjectStats(), damit es
+  // nur einen Berechnungsweg gibt und Zahlen nie auseinanderlaufen können.
 }

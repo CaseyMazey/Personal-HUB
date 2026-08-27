@@ -2,14 +2,16 @@
 // PROJEKTWALD — forest.js
 // =========================
 
-let forestView    = DB.get('projectForestView', false);
-
 // Wald-Übersicht: Tab/Such/Prioritäts-Filter — reiner Anzeigefilter,
 // beeinflusst weder Archivstatus noch Projektdaten. Bewusst nicht in DB
 // persistiert (Ansichtsfilter, kein Projektzustand).
 let forestFilterTab      = 'all';   // 'all' | 'active' | 'archived'
 let forestSearchQuery    = '';
 let forestPriorityFilter = '';      // '' | 'Niedrig' | 'Mittel' | 'Hoch'
+// Aktuelle Waldseite (0-basiert) — max. FOREST_SLOTS.length Projekte pro
+// Seite, ebenfalls reiner Anzeigezustand, nicht persistiert. Wird bei jeder
+// Änderung der gefilterten Liste (Tab/Suche/Priorität) auf 0 zurückgesetzt.
+let forestPage = 0;
 
 // =================================================
 // BAUMRENDERING -> ausgelagert in project-tree.js
@@ -84,13 +86,6 @@ function generateForestSlots(rowCounts) {
 
 const FOREST_SLOTS = generateForestSlots(FOREST_ROW_COUNTS);
 
-function getForestSlotForProject(project) {
-  const idx   = Math.max(0, projects.findIndex(p => p.id === project.id));
-  const slot  = FOREST_SLOTS[idx % FOREST_SLOTS.length];
-  const cycle = Math.floor(idx / FOREST_SLOTS.length);
-  return cycle === 0 ? slot : { ...slot, y: Math.min(92, slot.y + cycle * 3) };
-}
-
 // =========================
 // FILTER / TABS / SUCHE
 // =========================
@@ -115,6 +110,7 @@ function updateForestTabCounts() {
 
 function setForestTab(tab) {
   forestFilterTab = tab;
+  forestPage = 0;
   ['all', 'active', 'archived'].forEach(t => {
     const btn = document.getElementById(`forest-tab-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
@@ -128,6 +124,7 @@ document.getElementById('forest-tab-archived')?.addEventListener('click', () => 
 
 document.getElementById('forest-search-input')?.addEventListener('input', e => {
   forestSearchQuery = e.target.value.trim().toLowerCase();
+  forestPage = 0;
   renderForest();
 });
 
@@ -145,6 +142,7 @@ document.addEventListener('click', e => {
 document.querySelectorAll('#forest-filter-panel [data-prio]').forEach(btn => {
   btn.addEventListener('click', () => {
     forestPriorityFilter = btn.dataset.prio;
+    forestPage = 0;
     document.querySelectorAll('#forest-filter-panel [data-prio]').forEach(b => b.classList.toggle('active', b === btn));
     renderForest();
   });
@@ -197,7 +195,8 @@ function buildForestTree(project, slot, containerWidth) {
   bar.className = 'forest-tree-bar';
   const fill = document.createElement('div');
   fill.className = 'forest-tree-bar-fill';
-  fill.style.cssText = `width:${pct}%;background:${isDone ? '#d97706' : (project.color || '#4a7c59')};`;
+  fill.style.width = pct + '%';
+  if (isDone) fill.style.background = '#d97706';
   bar.appendChild(fill);
 
   const pctLabel = document.createElement('span');
@@ -244,8 +243,10 @@ function renderForest() {
   if (projects.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'forest-empty';
-    empty.textContent = 'Dein Wald ist noch leer. Erstelle dein erstes Projekt.';
+    empty.innerHTML = 'Dein Wald ist noch leer.<br><button type="button" class="forest-empty-add-btn" id="forest-empty-add-btn">+ Neues Projekt</button>';
     layer.appendChild(empty);
+    document.getElementById('forest-empty-add-btn')?.addEventListener('click', () => openProjectModal());
+    renderForestPager(0);
     return;
   }
 
@@ -255,63 +256,92 @@ function renderForest() {
     empty.className = 'forest-empty';
     empty.textContent = 'Keine Projekte gefunden.';
     layer.appendChild(empty);
+    renderForestPager(0);
     return;
   }
 
+  // Max. FOREST_SLOTS.length Bäume gleichzeitig sichtbar — feste Anordnung/
+  // Größe pro Slot bleibt dadurch immer gleich, unabhängig von der
+  // Gesamtprojektzahl. Überzählige Projekte landen auf weiteren Waldseiten
+  // statt (wie früher) optisch überlappend in dieselbe Anordnung gequetscht
+  // zu werden.
+  const pageSize   = FOREST_SLOTS.length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (forestPage >= totalPages) forestPage = totalPages - 1;
+  if (forestPage < 0) forestPage = 0;
+
+  const pageItems = filtered.slice(forestPage * pageSize, forestPage * pageSize + pageSize);
   const containerWidth = container.clientWidth || 1200;
-  filtered.forEach(project => {
-    const slot = getForestSlotForProject(project);
-    layer.appendChild(buildForestTree(project, slot, containerWidth));
+  pageItems.forEach((project, i) => {
+    layer.appendChild(buildForestTree(project, FOREST_SLOTS[i], containerWidth));
   });
+
+  renderForestPager(totalPages);
 }
+
+// =========================
+// WALD-SEITEN-NAVIGATION (max. 14 Bäume/Seite)
+// Dezente Pfeile an den Rändern (nur sichtbar, wenn es eine weitere/vorige
+// Seite gibt) + Punkt-Indikatoren, damit man auch bei mehr als 14 Projekten
+// weiß, wie viele Waldstücke es gibt und auf welchem man gerade steht —
+// ohne dass daraus eine klassische Seitenzahl-/Tabellen-Paginierung wird.
+// =========================
+function renderForestPager(totalPages) {
+  const prevBtn = document.getElementById('forest-page-prev');
+  const nextBtn = document.getElementById('forest-page-next');
+  const dotsEl  = document.getElementById('forest-page-dots');
+  if (!prevBtn || !nextBtn || !dotsEl) return;
+
+  prevBtn.style.display = (totalPages > 1 && forestPage > 0) ? '' : 'none';
+  nextBtn.style.display = (totalPages > 1 && forestPage < totalPages - 1) ? '' : 'none';
+
+  dotsEl.innerHTML = '';
+  if (totalPages > 1) {
+    for (let i = 0; i < totalPages; i++) {
+      const dot = document.createElement('span');
+      dot.className = 'forest-page-dot' + (i === forestPage ? ' active' : '');
+      dotsEl.appendChild(dot);
+    }
+  }
+}
+
+function goForestPage(dir) {
+  forestPage += dir;
+  const layer = document.getElementById('forest-trees-layer');
+  const bg    = document.querySelector('.forest-bg-img');
+  if (layer) {
+    layer.classList.add('forest-page-transition');
+    // Kleiner Landschafts-Schwenk (dasselbe Bild, nur minimal verschoben) —
+    // soll das Gefühl "weiter nach links/rechts schauen" erzeugen, ohne ein
+    // eigenes zweites Hintergrundbild pro Waldseite zu brauchen.
+    if (bg) bg.style.transform = `translateX(${dir > 0 ? '-1.5%' : '1.5%'})`;
+    setTimeout(() => {
+      renderForest();
+      layer.classList.remove('forest-page-transition');
+      if (bg) bg.style.transform = '';
+    }, 180);
+  } else {
+    renderForest();
+  }
+}
+
+document.getElementById('forest-page-prev')?.addEventListener('click', () => goForestPage(-1));
+document.getElementById('forest-page-next')?.addEventListener('click', () => goForestPage(1));
 
 // =========================
 // TOGGLE LOGIK
-// #project-header-actions (View-Umschalter/Archiv/+Neues Projekt) wird
-// zwischen dem normalen Kartenansicht-Header und dem Wald-Overlay-Header
-// umgehängt statt dupliziert — gleiches Muster wie Positivity/Countdowns
-// zwischen #sidebar und #view-mehr (siehe main.js).
+// Projektwald ist die einzige Übersichtsansicht — diese Funktion aktiviert
+// sie (nach dem Schließen der Detailseite, oder einmalig beim Laden).
 // =========================
-function switchToCardView() {
-  forestView = false;
-  DB.set('projectForestView', false);
-
-  const actions = document.getElementById('project-header-actions');
-  const plainHeader = document.getElementById('project-plain-header');
-  if (actions && plainHeader && actions.parentElement !== plainHeader) plainHeader.appendChild(actions);
-
-  document.getElementById('project-grid').style.display        = '';
-  document.getElementById('project-forest-wrap').style.display = 'none';
-  document.getElementById('view-project-detail').style.display = 'none';
-  document.getElementById('proj-view-cards').classList.add('active');
-  document.getElementById('proj-view-forest').classList.remove('active');
-  plainHeader.style.display = '';
-  document.getElementById('project-dash-content').classList.remove('forest-active');
-}
-
 function switchToForestView() {
-  forestView = true;
-  DB.set('projectForestView', true);
-
-  const actions    = document.getElementById('project-header-actions');
-  const forestSlot = document.getElementById('forest-overlay-actions-slot');
-  if (actions && forestSlot && actions.parentElement !== forestSlot) forestSlot.appendChild(actions);
-
-  document.getElementById('project-grid').style.display        = 'none';
   document.getElementById('project-forest-wrap').style.display = '';
   document.getElementById('view-project-detail').style.display = 'none';
   document.getElementById('forest-toolbar').style.display      = '';
-  document.getElementById('proj-view-cards').classList.remove('active');
-  document.getElementById('proj-view-forest').classList.add('active');
-  document.getElementById('project-plain-header').style.display = 'none';
   document.getElementById('project-dash-content').classList.add('forest-active');
   renderForest();
 }
 
-document.getElementById('proj-view-cards').addEventListener('click', switchToCardView);
-document.getElementById('proj-view-forest').addEventListener('click', switchToForestView);
-
-if (forestView) switchToForestView();
+switchToForestView();
 
 // =========================
 // DETAILANSICHT
@@ -324,8 +354,6 @@ function openProjectDetail(projectId) {
   if (!currentDetailProject) return;
   detailSubLayer = 0;
 
-  const vh = document.querySelector('#view-projects > .view-header');
-  if (vh) vh.style.display = 'none';
   const dc = document.querySelector('#view-projects .dash-content');
   // forest-active bringt eine feste height:calc(100vh-44px)+overflow:hidden
   // mit (siehe .dash-content.forest-active in projects.css) — die darf beim
@@ -335,7 +363,6 @@ function openProjectDetail(projectId) {
   if (dc) { dc.classList.remove('forest-active'); dc.classList.add('pdt-active'); }
   document.getElementById('forest-toolbar').style.display = 'none';
 
-  document.getElementById('project-grid').style.display        = 'none';
   document.getElementById('project-forest-wrap').style.display = 'none';
   document.getElementById('view-project-detail').style.display = '';
 
@@ -343,8 +370,6 @@ function openProjectDetail(projectId) {
 }
 
 function closeProjectDetail() {
-  const vh = document.querySelector('#view-projects > .view-header');
-  if (vh) vh.style.display = '';
   const dc = document.querySelector('#view-projects .dash-content');
   if (dc) dc.classList.remove('pdt-active');
 
@@ -362,21 +387,22 @@ function renderProjectDetail() {
   document.getElementById('proj-detail-status').textContent = p.archived ? 'Archiviert' : 'Aktives Projekt';
   document.getElementById('proj-detail-status').className   = 'pdt-status-badge' + (p.archived ? ' archived' : '');
 
-  const allTasks = (p.subprojects||[]).flatMap(sp => sp.tasks||[]);
-  const total    = allTasks.length;
-  const done     = allTasks.filter(t => t.done).length;
-  const pct      = total === 0 ? 0 : Math.round(done / total * 100);
+  // Einzige Fortschritts-Quelle für die Detailseite: getProjectStats() (projects.js)
+  // rechnet Haupt- UND Unterprojekt-Aufgaben korrekt zusammen. updateDetailTreeElements()
+  // schreibt diese Werte NICHT mehr selbst (siehe project-tree.js) — sonst zwei
+  // unabhängige, potenziell widersprüchliche Berechnungen für dieselben DOM-Elemente.
+  const stats = getProjectStats(p);
+  const total = stats.coreTasks.length + stats.subTotal;
+  const done  = stats.coreDone + stats.subDone;
+  const pct   = stats.coreProgress;
 
   document.getElementById('proj-detail-pct').textContent       = pct + '%';
-  document.getElementById('proj-detail-bar-fill').style.cssText = `width:${pct}%;background:${p.color||'#4a7c59'};`;
+  document.getElementById('proj-detail-bar-fill').style.width  = pct + '%';
   document.getElementById('proj-detail-task-count').textContent = `${done} / ${total} Aufgaben`;
   document.getElementById('proj-detail-sub-count').textContent  = `${p.subprojects.length} Unterprojekte`;
   document.getElementById('proj-detail-startdate').textContent  = formatStartDate(p) || '—';
-  document.getElementById('proj-detail-color-dot').style.background = p.color || '#4a7c59';
 
   // Neue Felder
-  const colorNameEl = document.getElementById('proj-detail-color-name');
-  if (colorNameEl) colorNameEl.textContent = p.color || '#4a7c59';
   const statusValEl = document.getElementById('proj-detail-status-val');
   if (statusValEl) { statusValEl.textContent = p.archived ? 'Archiviert' : 'Aktiv'; statusValEl.style.color = p.archived ? '#d97706' : '#16a34a'; }
   const subValEl = document.getElementById('proj-detail-sub-val');
@@ -397,16 +423,167 @@ function renderProjectDetail() {
   renderDetailTiles();
 }
 
+// Eine Aufgabenzeile (Checkbox, Label mit Detail-Link, Umbenennen/Verschieben/
+// Löschen) — von der Haupt-Aufgaben-Kachel UND jeder Unterprojekt-Kachel
+// gemeinsam genutzt, damit beide Orte exakt dieselben Fähigkeiten haben.
+function buildDetailTaskRow(task, project, subproject) {
+  const row = document.createElement('div');
+  row.className = 'detail-tile-task-row' + (task.done ? ' done' : '') + (task.isExtra ? ' extra' : '');
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = task.done;
+  cb.className = 'project-task-cb';
+  cb.addEventListener('change', () => {
+    task.done = cb.checked;
+    task.completedAt = cb.checked ? Date.now() : null;
+    saveProjects();
+    // Erledigt-Status ändert die Fortschrittszahlen im Hero — komplett neu
+    // rendern (deckt Baumdeko + Kacheln + Prozent/Zähler in einem Aufwasch ab).
+    renderProjectDetail();
+    renderForest();
+  });
+
+  const label = document.createElement('span');
+  label.className = 'detail-tile-task-label';
+  label.textContent = task.text;
+  if (task.description || (task.checklist && task.checklist.length)) {
+    const dot = document.createElement('span');
+    dot.className = 'detail-task-has-detail';
+    dot.textContent = '·';
+    label.appendChild(dot);
+  }
+  label.addEventListener('click', () => openTaskDetail(task, subproject, project));
+  label.style.cursor = 'pointer';
+
+  const actions = document.createElement('div');
+  actions.className = 'detail-tile-task-actions';
+
+  const renameBtn = document.createElement('button');
+  renameBtn.type = 'button';
+  renameBtn.className = 'detail-task-icon-btn';
+  renameBtn.title = 'Umbenennen';
+  renameBtn.textContent = '✎';
+  renameBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    startInlineEdit(label, task, project, () => renderDetailTiles());
+  });
+
+  const moveBtn = document.createElement('button');
+  moveBtn.type = 'button';
+  moveBtn.className = 'detail-task-icon-btn';
+  moveBtn.title = 'Verschieben';
+  moveBtn.textContent = '⇄';
+  moveBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    openMoveTaskModal(task, project, subproject);
+  });
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'detail-task-icon-btn';
+  delBtn.title = 'Löschen';
+  delBtn.textContent = '✕';
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (subproject) {
+      subproject.tasks = subproject.tasks.filter(t => t.id !== task.id);
+    } else {
+      project.tasks = project.tasks.filter(t => t.id !== task.id);
+    }
+    saveProjects();
+    renderProjectDetail();
+    renderForest();
+  });
+
+  actions.append(renameBtn, moveBtn, delBtn);
+
+  if (task.isExtra) {
+    const badge = document.createElement('span');
+    badge.className = 'detail-tile-extra-badge';
+    badge.textContent = '✦';
+    row.append(cb, label, badge, actions);
+  } else {
+    row.append(cb, label, actions);
+  }
+  return row;
+}
+
+// Immer sichtbare, nicht paginierte Kachel für Aufgaben direkt am Projekt
+// (ohne Unterprojekt) — vorher in der Detailansicht komplett unsichtbar.
+function buildMainTasksTile(p) {
+  const stats = getProjectStats(p);
+  const mainTotal = stats.coreTasks.length + stats.extraTasks.length;
+  const mainDone  = stats.coreDone + stats.extraDone;
+  const mainPct   = mainTotal === 0 ? 0 : Math.round(mainDone / mainTotal * 100);
+
+  const tile = document.createElement('div');
+  tile.className = 'detail-tile detail-tile-main';
+
+  const head = document.createElement('div');
+  head.className = 'detail-tile-head';
+  const title = document.createElement('div');
+  title.className = 'detail-tile-title';
+  title.textContent = 'Hauptaufgaben';
+  const meta = document.createElement('div');
+  meta.className = 'detail-tile-meta';
+  meta.textContent = `${mainDone}/${mainTotal}`;
+  head.append(title, meta);
+
+  const barWrap = document.createElement('div');
+  barWrap.className = 'detail-tile-bar-wrap';
+  const barFill = document.createElement('div');
+  barFill.className = 'detail-tile-bar-fill';
+  barFill.style.width = mainPct + '%';
+  if (mainPct === 100 && mainTotal > 0) barFill.style.background = '#16a34a';
+  barWrap.appendChild(barFill);
+
+  const taskList = document.createElement('div');
+  taskList.className = 'detail-tile-tasks';
+
+  if (mainTotal === 0) {
+    const hint = document.createElement('div');
+    hint.className = 'detail-tile-empty';
+    hint.textContent = 'Noch keine Aufgaben direkt am Projekt.';
+    taskList.appendChild(hint);
+  } else {
+    stats.coreTasks.forEach(task => taskList.appendChild(buildDetailTaskRow(task, p, null)));
+    if (stats.extraTasks.length > 0) {
+      const divider = document.createElement('div');
+      divider.className = 'detail-tile-divider';
+      divider.textContent = '✦ Extras';
+      taskList.appendChild(divider);
+      stats.extraTasks.forEach(task => taskList.appendChild(buildDetailTaskRow(task, p, null)));
+    }
+  }
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'detail-tile-add-btn';
+  addBtn.textContent = '+ Aufgabe hinzufügen';
+  addBtn.addEventListener('click', () => openAddTaskModalFromDetail(p.id, null));
+  taskList.appendChild(addBtn);
+
+  tile.append(head, barWrap, taskList);
+  return tile;
+}
+
 function renderDetailTiles() {
   const p    = currentDetailProject;
   const grid = document.getElementById('proj-detail-tiles');
   grid.innerHTML = '';
 
+  // Haupt-Aufgaben-Kachel — immer an erster Stelle, nie paginiert.
+  grid.appendChild(buildMainTasksTile(p));
+
   const layerStart  = detailSubLayer * 7;
   const visibleSubs = p.subprojects.slice(layerStart, layerStart + 7);
 
   if (visibleSubs.length === 0) {
-    grid.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:20px;">Noch keine Unterprojekte. Füge über „+ Ast hinzufügen" einen hinzu.</div>';
+    const hint = document.createElement('div');
+    hint.className = 'detail-tile-empty';
+    hint.style.padding = '20px 4px';
+    hint.textContent = 'Noch keine Unterprojekte. Füge über „+ Ast hinzufügen" einen hinzu.';
+    grid.appendChild(hint);
     return;
   }
 
@@ -429,7 +606,8 @@ function renderDetailTiles() {
     barWrap.className = 'detail-tile-bar-wrap';
     const barFill = document.createElement('div');
     barFill.className = 'detail-tile-bar-fill';
-    barFill.style.cssText = `width:${stats.pct}%;background:${stats.pct===100?'#16a34a':(p.color||'#4a7c59')};`;
+    barFill.style.width = stats.pct + '%';
+    if (stats.pct === 100) barFill.style.background = '#16a34a';
     barWrap.appendChild(barFill);
 
     const taskList = document.createElement('div');
@@ -440,46 +618,9 @@ function renderDetailTiles() {
       hint.className = 'detail-tile-empty';
       hint.textContent = 'Noch keine Aufgaben.';
       taskList.appendChild(hint);
+    } else {
+      sp.tasks.forEach(task => taskList.appendChild(buildDetailTaskRow(task, p, sp)));
     }
-
-    sp.tasks.forEach(task => {
-      const row = document.createElement('div');
-      row.className = 'detail-tile-task-row' + (task.done ? ' done' : '') + (task.isExtra ? ' extra' : '');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = task.done;
-      cb.className = 'project-task-cb';
-      cb.style.accentColor = p.color || '#4a7c59';
-      cb.addEventListener('change', () => {
-        task.done = cb.checked;
-        task.completedAt = cb.checked ? Date.now() : null;
-        saveProjects();
-        // NUR Blätter/Äpfel neu zeichnen — Baumstruktur bleibt!
-        updateDetailTreeElements(p);
-        renderDetailTiles();
-        if (forestView) renderForest();
-      });
-      const label = document.createElement('span');
-      label.className = 'detail-tile-task-label';
-      label.textContent = task.text;
-      if (task.description || (task.checklist && task.checklist.length)) {
-        const dot = document.createElement('span');
-        dot.className = 'detail-task-has-detail';
-        dot.textContent = '·';
-        label.appendChild(dot);
-      }
-      label.addEventListener('click', () => openTaskDetail(task, sp, p));
-      label.style.cursor = 'pointer';
-      if (task.isExtra) {
-        const badge = document.createElement('span');
-        badge.className = 'detail-tile-extra-badge';
-        badge.textContent = '✦';
-        row.append(cb, label, badge);
-      } else {
-        row.append(cb, label);
-      }
-      taskList.appendChild(row);
-    });
 
     const addBtn = document.createElement('button');
     addBtn.className = 'detail-tile-add-btn';
@@ -504,7 +645,7 @@ let currentTaskDetail = null;
 function openTaskDetail(task, sp, project) {
   currentTaskDetail = { task, sp, project };
   document.getElementById('task-detail-title').textContent = task.text;
-  document.getElementById('task-detail-sp').textContent    = sp.title;
+  document.getElementById('task-detail-sp').textContent    = sp ? sp.title : 'Hauptaufgabe';
   document.getElementById('task-detail-type').textContent  = task.isExtra ? '✦ Extra' : '◉ Kern';
   document.getElementById('task-detail-desc').value        = task.description || '';
   document.getElementById('task-detail-done-cb').checked   = task.done;
@@ -548,7 +689,8 @@ document.getElementById('task-detail-done-cb').addEventListener('change', () => 
   currentTaskDetail.task.done = document.getElementById('task-detail-done-cb').checked;
   currentTaskDetail.task.completedAt = currentTaskDetail.task.done ? Date.now() : null;
   saveProjects();
-  if (currentDetailProject) { updateDetailTreeElements(currentDetailProject); renderDetailTiles(); }
+  if (currentDetailProject) renderProjectDetail();
+  renderForest();
 });
 
 document.getElementById('task-detail-add-cl').addEventListener('click', () => {
@@ -568,6 +710,31 @@ document.getElementById('task-detail-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('task-detail-overlay')) closeTaskDetail();
 });
 
+document.getElementById('task-detail-rename').addEventListener('click', () => {
+  if (!currentTaskDetail) return;
+  const { task, project } = currentTaskDetail;
+  const titleEl = document.getElementById('task-detail-title');
+  startInlineEdit(titleEl, task, project, () => {
+    titleEl.textContent = task.text;
+    renderDetailTiles();
+    renderForest();
+  });
+});
+
+document.getElementById('task-detail-delete').addEventListener('click', () => {
+  if (!currentTaskDetail) return;
+  const { task, sp, project } = currentTaskDetail;
+  if (sp) {
+    sp.tasks = sp.tasks.filter(t => t.id !== task.id);
+  } else {
+    project.tasks = project.tasks.filter(t => t.id !== task.id);
+  }
+  saveProjects();
+  closeTaskDetail();
+  if (currentDetailProject) renderProjectDetail();
+  renderForest();
+});
+
 // =========================
 // AUFGABE AUS DETAIL HINZUFÜGEN
 // =========================
@@ -577,8 +744,8 @@ function openAddTaskModalFromDetail(projectId, subprojectId) {
   addTaskIsExtra            = false;
   addTaskTargetSubprojectId = subprojectId;
   const proj = projects.find(p => p.id === projectId);
-  const sp   = (proj.subprojects||[]).find(s => s.id === subprojectId);
-  document.getElementById('project-task-modal-title').textContent = `Aufgabe zu „${sp ? sp.title : ''}"`;
+  const sp   = subprojectId ? (proj.subprojects||[]).find(s => s.id === subprojectId) : null;
+  document.getElementById('project-task-modal-title').textContent = sp ? `Aufgabe zu „${sp.title}"` : 'Neue Hauptaufgabe';
   document.getElementById('project-task-input').value = '';
   document.getElementById('project-task-desc-input').value = '';
   document.getElementById('task-type-core').classList.add('active');
@@ -656,6 +823,7 @@ if (pdtMenuBtn) {
     menu.innerHTML = `
       <button type="button" class="b-header-dropdown-item" id="pdt-menu-edit">✏️ Bearbeiten</button>
       <button type="button" class="b-header-dropdown-item" id="pdt-menu-finish">${finishLabel}</button>
+      <button type="button" class="b-header-dropdown-item" id="pdt-menu-delete">🗑 Projekt löschen</button>
     `;
     const rect = pdtMenuBtn.getBoundingClientRect();
     menu.style.top   = (rect.bottom + 6) + 'px';
@@ -689,6 +857,22 @@ if (pdtMenuBtn) {
           if (idx !== -1) projects[idx].archived = true;
           saveProjects();
           renderProjectDetail();
+        }
+      );
+    });
+    document.getElementById('pdt-menu-delete').addEventListener('click', () => {
+      closePdtMenu();
+      if (!currentDetailProject) return;
+      const project = currentDetailProject;
+      openConfirmModal(
+        'Projekt löschen?',
+        `„${project.name}" wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`,
+        'Löschen',
+        'danger',
+        () => {
+          projects = projects.filter(pr => pr.id !== project.id);
+          saveProjects();
+          closeProjectDetail();
         }
       );
     });

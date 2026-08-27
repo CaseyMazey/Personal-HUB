@@ -14,12 +14,7 @@ if (typeof projects === 'undefined') {
   projects = DB.get('projects', []);
 }
 
-let projectCollapsed = DB.get('projectCollapsed', {});
-
-function saveProjects()      { DB.set('projects', projects); }
-function saveCollapseState() { DB.set('projectCollapsed', projectCollapsed); }
-
-function isCollapsed(id) { return projectCollapsed[id] !== false; }
+function saveProjects() { DB.set('projects', projects); }
 
 // Migriert alte Projekte auf neue Felder
 function migrateProject(p) {
@@ -100,422 +95,14 @@ function formatStartDate(project) {
 // RENDER — Übersicht
 // =========================
 
+// Projektwald ist die einzige Übersicht — renderProjects() bleibt nur als
+// Dispatch-Ziel bestehen, da renderView('projects') (main.js) genau diesen
+// Funktionsnamen aufruft.
 function renderProjects() {
-  // Wald-Ansicht neu messen/zeichnen, sobald der Tab tatsächlich sichtbar
-  // wird: renderView('projects') ist der einzige Einstiegspunkt, der beim
-  // Reiterwechsel läuft. Der initiale switchToForestView()-Aufruf beim
-  // Laden (forest.js) findet dagegen oft statt, während #view-projects noch
-  // nicht aktiv ist -> container.clientWidth ist dann 0 und der Fallback
-  // (1200px) liefert zu kleine Bäume, bis renderForest() hier mit der
-  // echten Breite erneut läuft.
-  if (typeof forestView !== 'undefined' && forestView) renderForest();
-
-  const grid = document.getElementById('project-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  renderProjectStats();
-
-  const active = projects.filter(p => !p.archived);
-  if (active.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'project-empty-state';
-    empty.textContent = 'Noch keine Projekte. Erstelle dein erstes mit „+ Neues Projekt".';
-    grid.appendChild(empty);
-    return;
-  }
-  active.forEach(project => {
-    const stats = getProjectStats(project);
-    grid.appendChild(buildProjectCard(project, stats));
-  });
+  renderForest();
 }
 
-function renderProjectStats() {
-  const bar = document.getElementById('project-stats-bar');
-  if (!bar) return;
-  const active   = projects.filter(p => !p.archived).length;
-  const archived = projects.filter(p =>  p.archived).length;
-  let totalCore = 0, totalDone = 0;
-  projects.filter(p => !p.archived).forEach(p => {
-    const s = getProjectStats(p);
-    totalCore += s.coreTasks.length + s.subTotal;
-    totalDone += s.coreDone + s.subDone;
-  });
-  const overall = totalCore === 0 ? 0 : Math.round((totalDone / totalCore) * 100);
-  bar.innerHTML = `
-    <span class="proj-stat"><strong>${active}</strong> aktiv</span>
-    <span class="proj-stat-sep">·</span>
-    <span class="proj-stat"><strong>${archived}</strong> archiviert</span>
-    <span class="proj-stat-sep">·</span>
-    <span class="proj-stat"><strong>${overall}%</strong> Gesamtfortschritt</span>
-  `;
-}
-
-// =========================
-// PROJEKT KARTE
-// =========================
-
-function buildProjectCard(project, stats) {
-  const collapsed = isCollapsed(project.id);
-
-  const card = document.createElement('div');
-  card.className = 'project-card' + (collapsed ? ' collapsed' : '');
-  card.id = `proj-card-${project.id}`;
-  card.style.setProperty('--proj-color', project.color || '#2563eb');
-
-  // ---- Header ----
-  const header = document.createElement('div');
-  header.className = 'project-card-header';
-  header.style.cursor = 'pointer';
-  header.addEventListener('click', () => toggleProjectCollapse(project.id));
-
-  const chevron = document.createElement('span');
-  chevron.className = 'project-chevron';
-  chevron.innerHTML = collapsed
-    ? `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 5.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-    : `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 8.5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
-  const colorDot = document.createElement('div');
-  colorDot.className = 'project-color-dot';
-  colorDot.style.background = project.color || '#2563eb';
-
-  const titleWrap = document.createElement('div');
-  titleWrap.style.cssText = 'flex:1;min-width:0;';
-
-  const titleEl = document.createElement('div');
-  titleEl.className = 'project-card-title';
-  titleEl.textContent = project.name;
-  titleWrap.appendChild(titleEl);
-
-  if (project.description) {
-    const desc = document.createElement('div');
-    desc.className = 'project-card-desc';
-    desc.textContent = project.description;
-    titleWrap.appendChild(desc);
-  }
-
-  // Offene Aufgaben Badge (nur eingeklappt)
-  const openBadge = document.createElement('div');
-  openBadge.className = 'project-open-badge';
-  const openTotal = stats.openCore + stats.openExtra;
-  if (openTotal > 0) {
-    let parts = [];
-    if (stats.openCore  > 0) parts.push(`${stats.openCore} Kern`);
-    if (stats.openExtra > 0) parts.push(`${stats.openExtra} Extra`);
-    openBadge.innerHTML = `<span class="proj-open-count">${openTotal} offen</span><span class="proj-open-detail">${parts.join(', ')}</span>`;
-  }
-  titleWrap.appendChild(openBadge);
-
-  // Startdatum
-  const dateLabel = formatStartDate(project);
-  if (dateLabel) {
-    const dateLine = document.createElement('div');
-    dateLine.className = 'project-start-date';
-    dateLine.textContent = dateLabel;
-    titleWrap.appendChild(dateLine);
-  }
-
-  const actions = document.createElement('div');
-  actions.className = 'project-card-actions';
-
-  const editBtn = document.createElement('button');
-  editBtn.className = 'task-delete';
-  editBtn.textContent = '✎';
-  editBtn.title = 'Bearbeiten';
-  editBtn.addEventListener('click', e => { e.stopPropagation(); openProjectModal(project); });
-
-  const delBtn = document.createElement('button');
-  delBtn.className = 'task-delete';
-  delBtn.textContent = '✕';
-  delBtn.title = 'Löschen';
-  delBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    openConfirmModal(
-      `Projekt löschen?`,
-      `„${project.name}" wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`,
-      'Löschen',
-      'danger',
-      () => {
-        projects = projects.filter(p => p.id !== project.id);
-        delete projectCollapsed[project.id];
-        saveProjects(); saveCollapseState(); renderProjects();
-      }
-    );
-  });
-
-  actions.append(editBtn, delBtn);
-  header.append(chevron, colorDot, titleWrap, actions);
-  card.appendChild(header);
-
-  // ---- Progress ----
-  const progressSection = document.createElement('div');
-  progressSection.className = 'project-progress-section';
-
-  const coreRow = document.createElement('div');
-  coreRow.className = 'project-progress-row';
-  const coreLabel = document.createElement('span');
-  coreLabel.className = 'project-progress-label';
-  coreLabel.textContent = `Kernaufgaben ${stats.coreDone}/${stats.coreTasks.length + stats.subTotal}`;
-  const corePct = document.createElement('span');
-  corePct.className = 'project-progress-pct';
-  corePct.textContent = `${stats.coreProgress}%`;
-  coreRow.append(coreLabel, corePct);
-
-  const coreBarWrap = document.createElement('div');
-  coreBarWrap.className = 'project-bar-wrap';
-  const coreBar = document.createElement('div');
-  coreBar.className = 'project-bar-fill' + (stats.coreProgress === 100 ? ' complete' : '');
-  coreBar.style.width = `${stats.coreProgress}%`;
-  coreBar.style.background = stats.coreProgress === 100 ? '#16a34a' : (project.color || '#2563eb');
-  coreBarWrap.appendChild(coreBar);
-  progressSection.append(coreRow, coreBarWrap);
-
-  if (stats.extraTasks.length > 0) {
-    const extraRow = document.createElement('div');
-    extraRow.className = 'project-progress-row';
-    extraRow.style.marginTop = '8px';
-    const extraLabel = document.createElement('span');
-    extraLabel.className = 'project-progress-label';
-    extraLabel.textContent = `Extras ${stats.extraDone}/${stats.extraTasks.length}`;
-    const extraPct = document.createElement('span');
-    extraPct.className = 'project-progress-pct project-progress-pct--extra';
-    extraPct.textContent = `+${stats.extraProgress}%`;
-    extraRow.append(extraLabel, extraPct);
-    const extraBarWrap = document.createElement('div');
-    extraBarWrap.className = 'project-bar-wrap project-bar-wrap--extra';
-    const extraBar = document.createElement('div');
-    extraBar.className = 'project-bar-fill project-bar-fill--extra';
-    extraBar.style.width = `${stats.extraProgress}%`;
-    extraBarWrap.appendChild(extraBar);
-    progressSection.append(extraRow, extraBarWrap);
-  }
-  card.appendChild(progressSection);
-
-  // ---- Ausklappbarer Bereich ----
-  const expandable = document.createElement('div');
-  expandable.className = 'project-expandable';
-
-  const taskSection = document.createElement('div');
-  taskSection.className = 'project-task-section';
-
-  const coreTasks  = project.tasks.filter(t => !t.isExtra);
-  const extraTasks = project.tasks.filter(t =>  t.isExtra);
-
-  if (coreTasks.length === 0 && extraTasks.length === 0 && (project.subprojects || []).length === 0) {
-    const hint = document.createElement('div');
-    hint.className = 'project-task-empty';
-    hint.textContent = 'Noch keine Aufgaben.';
-    taskSection.appendChild(hint);
-  }
-
-  coreTasks.forEach(task => taskSection.appendChild(buildTaskRow(task, project, null)));
-
-  if (extraTasks.length > 0) {
-    const extraDivider = document.createElement('div');
-    extraDivider.className = 'project-section-divider';
-    extraDivider.textContent = '✦ Extras';
-    taskSection.appendChild(extraDivider);
-    extraTasks.forEach(task => taskSection.appendChild(buildTaskRow(task, project, null)));
-  }
-
-  // ---- Unterprojekte ----
-  (project.subprojects || []).forEach(sp => {
-    taskSection.appendChild(buildSubprojectSection(sp, project));
-  });
-
-  expandable.appendChild(taskSection);
-
-  // ---- Footer ----
-  const footer = document.createElement('div');
-  footer.className = 'project-card-footer';
-
-  const addCoreBtn = document.createElement('button');
-  addCoreBtn.className = 'project-add-task-btn';
-  addCoreBtn.textContent = '+ Aufgabe';
-  addCoreBtn.addEventListener('click', () => openAddTaskModal(project.id, false, null));
-
-  const addExtraBtn = document.createElement('button');
-  addExtraBtn.className = 'project-add-task-btn project-add-task-btn--extra';
-  addExtraBtn.textContent = '+ Extra';
-  addExtraBtn.addEventListener('click', () => openAddTaskModal(project.id, true, null));
-
-  const addSubBtn = document.createElement('button');
-  addSubBtn.className = 'project-add-task-btn project-add-task-btn--sub';
-  addSubBtn.textContent = '+ Unterprojekt';
-  addSubBtn.addEventListener('click', () => openAddSubprojectModal(project.id));
-
-  const archiveBtn = document.createElement('button');
-  archiveBtn.className = 'project-add-task-btn project-add-task-btn--archive';
-  archiveBtn.textContent = '⊘ Archivieren';
-  archiveBtn.addEventListener('click', () => {
-    openConfirmModal(
-      `Projekt archivieren?`,
-      `Das Projekt „${project.name}" wird ins Archiv verschoben. Es bleibt vollständig erhalten und kann wiederhergestellt werden.`,
-      'Archivieren',
-      'neutral',
-      () => {
-        const idx = projects.findIndex(p => p.id === project.id);
-        if (idx !== -1) projects[idx].archived = true;
-        saveProjects(); renderProjects();
-      }
-    );
-  });
-
-  footer.append(addCoreBtn, addExtraBtn, addSubBtn, archiveBtn);
-  expandable.appendChild(footer);
-
-  card.appendChild(expandable);
-  return card;
-}
-
-// =========================
-// UNTERPROJEKT
-// =========================
-
-function buildSubprojectSection(sp, project) {
-  const spStats = getSubprojectStats(sp);
-  const wrap = document.createElement('div');
-  wrap.className = 'subproject-wrap';
-  wrap.id = `subproj-${sp.id}`;
-
-  // Header
-  const head = document.createElement('div');
-  head.className = 'subproject-header';
-  head.style.cursor = 'pointer';
-
-  const spChevron = document.createElement('span');
-  spChevron.className = 'subproject-chevron';
-  spChevron.innerHTML = sp.collapsed
-    ? `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4 5.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-    : `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4 8.5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
-  const spTitle = document.createElement('span');
-  spTitle.className = 'subproject-title';
-  spTitle.textContent = sp.title;
-
-  const spProgress = document.createElement('span');
-  spProgress.className = 'subproject-progress';
-  spProgress.textContent = `${spStats.done}/${spStats.total}`;
-
-  const spBarWrap = document.createElement('div');
-  spBarWrap.className = 'subproject-bar-wrap';
-  const spBar = document.createElement('div');
-  spBar.className = 'subproject-bar-fill';
-  spBar.style.cssText = `width:${spStats.pct}%;background:${spStats.pct === 100 ? '#16a34a' : 'var(--proj-color, #2563eb)'};`;
-  spBarWrap.appendChild(spBar);
-
-  const spActions = document.createElement('div');
-  spActions.className = 'subproject-actions';
-
-  const spAddBtn = document.createElement('button');
-  spAddBtn.className = 'task-delete';
-  spAddBtn.textContent = '+';
-  spAddBtn.title = 'Aufgabe hinzufügen';
-  spAddBtn.addEventListener('click', e => { e.stopPropagation(); openAddTaskModal(project.id, false, sp.id); });
-
-  const spDelBtn = document.createElement('button');
-  spDelBtn.className = 'task-delete';
-  spDelBtn.textContent = '✕';
-  spDelBtn.title = 'Unterprojekt löschen';
-  spDelBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    openConfirmModal(
-      `Unterprojekt löschen?`,
-      `„${sp.title}" und alle enthaltenen Aufgaben werden gelöscht.`,
-      'Löschen',
-      'danger',
-      () => {
-        const proj = projects.find(p => p.id === project.id);
-        if (proj) proj.subprojects = proj.subprojects.filter(s => s.id !== sp.id);
-        saveProjects(); renderProjects();
-      }
-    );
-  });
-
-  spActions.append(spAddBtn, spDelBtn);
-  head.append(spChevron, spTitle, spProgress, spBarWrap, spActions);
-
-  head.addEventListener('click', () => {
-    sp.collapsed = !sp.collapsed;
-    saveProjects();
-    const body = wrap.querySelector('.subproject-body');
-    if (body) body.classList.toggle('collapsed', sp.collapsed);
-    spChevron.innerHTML = sp.collapsed
-      ? `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4 5.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      : `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M4 8.5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  });
-
-  const body = document.createElement('div');
-  body.className = 'subproject-body' + (sp.collapsed ? ' collapsed' : '');
-
-  if (sp.tasks.length === 0) {
-    const hint = document.createElement('div');
-    hint.className = 'project-task-empty';
-    hint.style.paddingLeft = '32px';
-    hint.textContent = 'Noch keine Aufgaben in diesem Unterprojekt.';
-    body.appendChild(hint);
-  } else {
-    sp.tasks.forEach(task => body.appendChild(buildTaskRow(task, project, sp)));
-  }
-
-  wrap.append(head, body);
-  return wrap;
-}
-
-// =========================
-// AUFGABE ZEILE
-// =========================
-
-function buildTaskRow(task, project, subproject) {
-  const row = document.createElement('div');
-  row.className = 'project-task-row' + (task.done ? ' done' : '') + (task.isExtra ? ' extra' : '');
-  if (subproject) row.style.paddingLeft = '32px';
-
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.checked = task.done;
-  cb.className = 'project-task-cb';
-  cb.style.accentColor = project.color || '#2563eb';
-  cb.addEventListener('change', () => {
-    task.done = cb.checked;
-    task.completedAt = cb.checked ? Date.now() : null;
-    saveProjects(); renderProjects();
-  });
-
-  const label = document.createElement('span');
-  label.className = 'project-task-label';
-  label.textContent = task.text;
-  // Inline bearbeiten per Doppelklick
-  label.title = 'Doppelklick zum Bearbeiten';
-  label.addEventListener('dblclick', () => startInlineEdit(label, task, project));
-
-  const taskActions = document.createElement('div');
-  taskActions.className = 'project-task-row-actions';
-
-  // Verschieben-Button
-  const moveBtn = document.createElement('button');
-  moveBtn.className = 'task-delete proj-task-move';
-  moveBtn.textContent = '⇄';
-  moveBtn.title = 'Verschieben';
-  moveBtn.addEventListener('click', e => { e.stopPropagation(); openMoveTaskModal(task, project, subproject); });
-
-  const del = document.createElement('button');
-  del.className = 'task-delete project-task-del';
-  del.textContent = '✕';
-  del.addEventListener('click', () => {
-    if (subproject) {
-      subproject.tasks = subproject.tasks.filter(t => t.id !== task.id);
-    } else {
-      project.tasks = project.tasks.filter(t => t.id !== task.id);
-    }
-    saveProjects(); renderProjects();
-  });
-
-  taskActions.append(moveBtn, del);
-  row.append(cb, label, taskActions);
-  return row;
-}
-
-function startInlineEdit(labelEl, task, project) {
+function startInlineEdit(labelEl, task, project, onDone) {
   if (labelEl.querySelector('input')) return;
   const input = document.createElement('input');
   input.type = 'text';
@@ -530,36 +117,13 @@ function startInlineEdit(labelEl, task, project) {
     const val = input.value.trim();
     if (val) task.text = val;
     saveProjects();
-    renderProjects();
+    if (typeof onDone === 'function') onDone(); else renderProjects();
   };
   input.addEventListener('blur', commit);
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
     if (e.key === 'Escape') { input.value = task.text; input.blur(); }
   });
-}
-
-// =========================
-// COLLAPSE / EXPAND
-// =========================
-
-function toggleProjectCollapse(id) {
-  const wasCollapsed = isCollapsed(id);
-  projectCollapsed[id] = !wasCollapsed;
-  saveCollapseState();
-
-  const card = document.getElementById(`proj-card-${id}`);
-  if (!card) return;
-
-  if (wasCollapsed) {
-    card.classList.remove('collapsed');
-    const chevron = card.querySelector('.project-chevron');
-    if (chevron) chevron.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 8.5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  } else {
-    card.classList.add('collapsed');
-    const chevron = card.querySelector('.project-chevron');
-    if (chevron) chevron.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 5.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  }
 }
 
 // =========================
@@ -592,11 +156,6 @@ function renderArchiveList() {
     const row = document.createElement('div');
     row.className = 'archive-project-row';
 
-    const dot = document.createElement('div');
-    dot.className = 'project-color-dot';
-    dot.style.background = project.color || '#2563eb';
-    dot.style.flexShrink = '0';
-
     const info = document.createElement('div');
     info.className = 'archive-project-info';
 
@@ -606,7 +165,7 @@ function renderArchiveList() {
 
     const meta = document.createElement('div');
     meta.className = 'archive-project-meta';
-    meta.textContent = `${stats.coreDone}/${stats.coreTasks.length} Kernaufgaben · ${stats.coreProgress}%`;
+    meta.textContent = `${stats.coreDone + stats.subDone}/${stats.coreTasks.length + stats.subTotal} Kernaufgaben · ${stats.coreProgress}%`;
     if (stats.extraTasks.length > 0) {
       meta.textContent += ` · ${stats.extraDone}/${stats.extraTasks.length} Extras`;
     }
@@ -638,15 +197,14 @@ function renderArchiveList() {
         'danger',
         () => {
           projects = projects.filter(p => p.id !== project.id);
-          delete projectCollapsed[project.id];
-          saveProjects(); saveCollapseState();
+          saveProjects();
           renderArchiveList(); renderProjects();
         }
       );
     });
 
     btns.append(restoreBtn, deleteBtn);
-    row.append(dot, info, btns);
+    row.append(info, btns);
     list.appendChild(row);
   });
 }
@@ -836,13 +394,16 @@ document.getElementById('project-task-modal-save').addEventListener('click', () 
     const sp = (proj.subprojects || []).find(s => s.id === addTaskTargetSubprojectId);
     if (sp) sp.tasks.push(newTask);
   } else {
-    projectCollapsed[addTaskTargetProjectId] = false;
-    saveCollapseState();
     proj.tasks.push(newTask);
   }
   proj.updatedAt = Date.now();
+  // Ziel-Id vor closeAddTaskModal() sichern — die setzt addTaskTargetProjectId
+  // sofort auf null zurück, sonst schlägt der Detailseiten-Refresh-Check unten fehl.
+  const savedTargetProjectId = addTaskTargetProjectId;
   saveProjects(); closeAddTaskModal(); renderProjects();
-  if (typeof currentDetailProject !== "undefined" && currentDetailProject && currentDetailProject.id === addTaskTargetProjectId) renderProjectDetail();
+  if (typeof currentDetailProject !== "undefined" && currentDetailProject && currentDetailProject.id === savedTargetProjectId) {
+    renderProjectDetail();
+  }
 });
 
 // =========================
@@ -881,9 +442,6 @@ document.getElementById('proj-sub-modal-save').addEventListener('click', () => {
   const proj = projects.find(p => p.id === addSubprojectTargetId);
   if (!proj) return;
   if (!proj.subprojects) proj.subprojects = [];
-
-  projectCollapsed[addSubprojectTargetId] = false;
-  saveCollapseState();
 
   proj.subprojects.push({
     id:        crypto.randomUUID(),
@@ -976,6 +534,9 @@ document.getElementById('proj-move-modal-save').addEventListener('click', () => 
   }
 
   saveProjects(); closeMoveTaskModal(); renderProjects();
+  if (typeof currentDetailProject !== "undefined" && currentDetailProject && currentDetailProject.id === project.id) {
+    renderProjectDetail();
+  }
 });
 
 // =========================
@@ -984,8 +545,7 @@ document.getElementById('proj-move-modal-save').addEventListener('click', () => 
 
 document.getElementById('add-project-btn').addEventListener('click', () => openProjectModal());
 
-// =========================
-// Init
-// =========================
-
-renderProjects();
+// Kein Init-Aufruf von renderProjects() hier nötig: forest.js (lädt danach)
+// ruft switchToForestView() bereits unconditional bei eigenem Laden auf,
+// was renderForest() intern anstößt. Ein Aufruf hier wäre zu früh —
+// renderForest() existiert erst, sobald forest.js geladen ist.

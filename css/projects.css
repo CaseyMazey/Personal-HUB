@@ -10,176 +10,11 @@
   --forest-bg: #1e2218;
 }
 
-#project-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 14px;
-  align-items: start;
-  margin-top: 20px;
-}
-
-.project-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--proj-color, #2563eb);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  transition: box-shadow var(--transition), border-color var(--transition);
-  box-shadow: var(--shadow-xs);
-}
-.project-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border-strong); }
-
-/* Progress bar fills */
-.project-bar-fill { background: var(--proj-color, var(--sage)); }
-.project-bar-fill.complete { background: var(--proj-success); }
-.project-bar-fill--extra { background: var(--text-3); }
-
-/* Checkbox accent */
+/* Checkbox accent — von Detailseite + Checklisten weiterhin genutzt */
 .project-task-cb { accent-color: var(--sage); }
-
-/* Empty state */
-.project-empty-state {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-3);
-  font-size: 14px;
-}
 
 /* Archive rows */
 .archive-project-meta { font-size: 12px; color: var(--text-3); margin-top: 2px; font-family: var(--mono); }
-
-/* --- Startdatum --- */
-.project-start-date {
-  font-size: 11px;
-  color: var(--text-3);
-  margin-top: 3px;
-  font-family: var(--mono);
-}
-
-/* --- Offene Aufgaben Badge (nur collapsed) --- */
-.project-open-badge {
-  display: none;
-  flex-direction: column;
-  margin-top: 4px;
-}
-.project-card.collapsed .project-open-badge { display: flex; }
-.proj-open-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--proj-color, #2563eb);
-  font-family: var(--mono);
-}
-.proj-open-detail {
-  font-size: 10px;
-  color: var(--text-3);
-  font-family: var(--mono);
-}
-
-/* --- Aufgaben-Row-Actions --- */
-.project-task-row-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 120ms;
-  flex-shrink: 0;
-}
-.project-task-row:hover .project-task-row-actions { opacity: 1; }
-
-/* Inline-Edit Input */
-.project-task-inline-input {
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  padding: 2px 6px;
-  width: 100%;
-  font-family: inherit;
-  outline: none;
-}
-.project-task-inline-input:focus { border-color: var(--proj-color, #2563eb); }
-
-/* --- Footer-Buttons --- */
-.project-add-task-btn--sub {
-  color: var(--text-3);
-  border-style: dotted;
-  font-style: italic;
-}
-.project-add-task-btn--archive {
-  color: var(--text-3);
-  border-color: transparent;
-  margin-left: auto;
-  font-size: 11px;
-  opacity: 0.7;
-}
-.project-add-task-btn--archive:hover { opacity: 1; color: var(--text-2); }
-
-/* --- Unterprojekte --- */
-.subproject-wrap {
-  border-top: 1px dashed var(--border);
-  margin-top: 4px;
-}
-
-.subproject-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 16px 7px 12px;
-  transition: background 120ms;
-}
-.subproject-header:hover { background: var(--bg); }
-
-.subproject-chevron {
-  display: flex;
-  align-items: center;
-  color: var(--text-3);
-  flex-shrink: 0;
-}
-
-.subproject-title {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-2);
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-
-.subproject-bar-wrap {
-  width: 60px;
-  height: 4px;
-  background: var(--bg);
-  border-radius: 99px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.subproject-bar-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 400ms ease;
-  background: var(--proj-color, #2563eb);
-}
-
-.subproject-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 120ms;
-  flex-shrink: 0;
-}
-.subproject-header:hover .subproject-actions { opacity: 1; }
-
-.subproject-body {
-  overflow: hidden;
-  max-height: 1500px;
-  transition: max-height 240ms ease, opacity 180ms ease;
-  opacity: 1;
-}
-.subproject-body.collapsed { max-height: 0; opacity: 0; }
 
 /* --- Bestätigungs-Modal --- */
 .proj-confirm-danger { background: #dc2626 !important; }
@@ -205,46 +40,16 @@
 .archive-project-info { flex: 1; min-width: 0; }
 
 /* =========================
-   VIEW TOGGLE
-========================= */
-.proj-view-toggle {
-  display: flex;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  gap: 0;
-}
-.proj-view-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 30px;
-  background: none;
-  border: none;
-  color: var(--text-3);
-  cursor: pointer;
-  transition: background 120ms, color 120ms;
-}
-.proj-view-btn:hover { background: var(--surface); color: var(--text-2); }
-.proj-view-btn.active { background: var(--surface); color: var(--text); }
-
-/* =========================
    PROJEKTWALD CONTAINER — Vollbild-Landschaft
-   Das Hintergrundbild (img/forest.png) ersetzt die normale dash-content-
-   Kachel komplett und füllt die gesamte verfügbare Fläche (object-fit:cover,
-   kein aspect-ratio-Lock mehr) — Titel, Tabs, Suche, Filter und Legende
-   liegen als Overlays direkt darauf, statt eigenen Platz oberhalb/unterhalb
-   zu beanspruchen. #project-dash-content bekommt dafür padding:0 und eine
-   feste Höhe (= Rest des Viewports unterhalb von .view), sobald die
-   Waldansicht aktiv ist (Klasse .forest-active, siehe forest.js).
+   Das Hintergrundbild (img/forest.png) füllt die gesamte verfügbare Fläche
+   (object-fit:cover) — Titel, Tabs, Suche, Filter und Legende liegen als
+   Overlays direkt darauf. Der Projektwald ist die einzige Übersicht,
+   .forest-active ist daher dauerhaft aktiv (siehe forest.js).
 ========================= */
 .dash-content.forest-active {
   padding: 0;
-  /* .view hat 28px oben / 16px unten Padding (main.css); der Kartenansicht-
-     Header ist in der Waldansicht komplett ausgeblendet (0px), daher bleibt
-     nur dieses Padding als Rest-Chrome übrig. */
+  /* .view hat 28px oben / 16px unten Padding (main.css); das bleibt als
+     Rest-Chrome übrig. */
   height: calc(100vh - 44px);
   overflow: hidden;
 }
@@ -475,6 +280,67 @@
 .forest-legend-dot--done   { background: #d97706; }
 
 /* =========================
+   WALDSEITEN-NAVIGATION — max. 14 Bäume/Seite (siehe renderForestPager()
+   in forest.js). Dezente Pfeile am Rand, nur sichtbar wenn nötig; Punkte
+   geben Orientierung, welches Waldstück gerade offen ist.
+========================= */
+.forest-page-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,252,246,0.86);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 120ms;
+}
+[data-theme-family="dark"] .forest-page-arrow { background: rgba(26,24,18,0.82); }
+.forest-page-arrow:hover { color: var(--sage); }
+.forest-page-arrow--prev { left: 16px; }
+.forest-page-arrow--next { right: 16px; }
+
+.forest-page-dots {
+  position: absolute;
+  left: 50%; bottom: 62px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+}
+.forest-page-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,252,246,0.75);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.forest-page-dot.active { background: var(--sage); }
+
+#forest-trees-layer.forest-page-transition { opacity: 0; transition: opacity 180ms; }
+.forest-bg-img { transition: transform 180ms; }
+
+.forest-empty-add-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--sage);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter 120ms;
+}
+.forest-empty-add-btn:hover { filter: brightness(1.06); }
+
+/* =========================
    PROJEKT DETAILANSICHT — Neustruktur
 ========================= */
 
@@ -557,14 +423,18 @@
   object-fit: cover; object-position: center 68%;
 }
 .pdt-hero-overlay {
+  /* Bewusst kein Wash mehr über dem Hintergrundbild — sollte unverfälscht/
+     kräftig sichtbar bleiben statt blass zu wirken. */
   position: absolute; inset: 0;
-  background: linear-gradient(to bottom,
-    rgba(var(--bg-rgb,248,245,240),0.05) 0%,
-    rgba(var(--bg-rgb,248,245,240),0.32) 100%);
 }
 
 /* Alle 3 Spalten über dem Hintergrund */
 .pdt-left, .pdt-tree-col, .pdt-info-card { position: relative; z-index: 1; }
+/* .pdt-tree-col wird in project-tree.css auf position:absolute (volle Hero-
+   Breite) umgestellt und damit aus dem Grid-Fluss genommen — .pdt-left/
+   .pdt-info-card sonst würden in Spalte 1/2 nachrücken statt 1/3. */
+.pdt-left { grid-column: 1; }
+.pdt-info-card { grid-column: 3; }
 
 /* ── LINKS: Projektinfo ── */
 .pdt-left {
@@ -640,13 +510,16 @@
   backdrop-filter: blur(8px);
   border: 1px solid rgba(180,150,100,0.2);
   border-radius: var(--radius-lg);
-  padding: 14px;
+  padding: 12px;
   display: flex; flex-direction: column; gap: 0;
   box-shadow: 0 4px 20px rgba(0,0,0,0.07);
-  /* schmal und elegant */
-  max-width: 210px;
+  /* schmal, elegant und nur so hoch wie der Inhalt — .pdt-hero hat
+     align-items:stretch, ohne align-self:start würde die Karte sonst immer
+     auf die volle Hero-Höhe gedehnt (viel Leerraum unter dem Zitat). */
+  max-width: 200px;
   margin-left: auto;
   width: calc(100% - 32px);
+  align-self: start;
 }
 [data-theme-family="dark"] .pdt-info-card {
   background: rgba(26,30,20,0.88);
@@ -656,12 +529,12 @@
 .pdt-info-card-title {
   font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--text-3); margin-bottom: 16px;
+  color: var(--text-3); margin-bottom: 10px;
 }
 
 .pdt-info-item {
   display: flex; align-items: flex-start; gap: 12px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-bottom: 1px solid rgba(0,0,0,0.055);
 }
 .pdt-info-item:last-of-type { border-bottom: none; }
@@ -672,8 +545,6 @@
   justify-content: center; flex-shrink: 0;
   color: var(--text-3); margin-top: 1px;
 }
-.pdt-color-dot { width: 13px; height: 13px; border-radius: 50%; display: block; }
-
 .pdt-info-content { display: flex; flex-direction: column; gap: 1px; }
 .pdt-info-key { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .pdt-info-val { font-size: 13.5px; font-weight: 500; color: var(--text); margin-top: 2px; }
@@ -766,6 +637,28 @@
 .detail-tile-extra-badge { font-size: 10px; color: var(--text-3); flex-shrink: 0; }
 .detail-task-has-detail { color: var(--text-3); margin-left: 4px; font-size: 15px; line-height: 1; vertical-align: middle; }
 
+/* Umbenennen/Verschieben/Löschen je Aufgabenzeile — nur bei Hover sichtbar,
+   damit die Liste im Ruhezustand aufgeräumt bleibt (gleiches Prinzip wie
+   die alte Kartenansicht, nur als eigene kleinere Variante von .icon-btn). */
+.detail-tile-task-actions {
+  display: flex; gap: 2px; flex-shrink: 0;
+  opacity: 0; transition: opacity 100ms;
+}
+.detail-tile-task-row:hover .detail-tile-task-actions { opacity: 1; }
+.detail-task-icon-btn {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: 6px;
+  font-size: 12px; color: var(--text-3); cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.detail-task-icon-btn:hover { background: var(--bg); color: var(--text); }
+
+.detail-tile-divider {
+  font-size: 10px; color: var(--text-3); letter-spacing: 0.02em;
+  padding: 8px 18px 2px;
+}
+
 .detail-tile-add-btn {
   width: 100%; text-align: left;
   padding: 9px 18px; font-size: 12.5px; color: var(--text-3);
@@ -797,8 +690,8 @@
 
 /* =============================================================
    RESPONSIVE
-   #project-grid und .pdt-tiles-grid nutzen bereits auto-fill/minmax
-   und brauchen keine Breakpoints. Die Hero (28%/44%/28%-Spalten,
+   .pdt-tiles-grid nutzt bereits auto-fill/minmax und braucht keine
+   Breakpoints. Die Hero (28%/44%/28%-Spalten,
    ~60vh Höhe) verträgt sich dagegen nicht mit schmaleren Breiten — die
    stapeln wir stattdessen (Höhe dann content-getrieben statt 60vh).
 ============================================================= */
@@ -806,8 +699,16 @@
   .pdt-hero { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .pdt-left { padding: 22px 24px 8px; }
   .pdt-project-name { font-size: 38px; }
-  .pdt-tree-col { min-height: 260px; padding-top: 0; }
-  .pdt-info-card { margin: 0 24px 22px; max-width: none; width: auto; }
+  /* Die volle-Hero-Überlagerung der Baumspalte (siehe project-tree.css) gilt
+     nur für das 3-Spalten-Desktop-Layout — hier wird wieder normal gestapelt.
+     .pdt-tree-col hat dann keine definierte Höhe mehr (normaler Fluss statt
+     inset:0 auf die Hero) — height:100% auf Wrap/Bild würde sich sonst auf
+     "auto" zurückfallen (Prozenthöhe gegen unbestimmte Elternhöhe) und die
+     Bild-Originalgröße rendern. Deshalb hier zurück auf breitenbasiert. */
+  .pdt-tree-col { position: relative; inset: auto; align-items: center; min-height: 260px; padding: 0; }
+  .pdt-tree-wrap { height: auto; width: min(400px, 85%); }
+  .pdt-tree-img { height: auto; width: 100%; }
+  .pdt-info-card { grid-column: 1; margin: 0 24px 22px; max-width: none; width: auto; }
 }
 
 @media (max-width: 480px) {
