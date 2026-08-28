@@ -104,9 +104,9 @@ function updateDetailTreeElements(p) {
   const extraDone  = Math.min(allTasks.filter(t => t.done &&  t.isExtra).length, DECOR_MAX);
 
   const decor = [
-    ...generateCanopySlots(p, 401, coreDone).map(s => ({ ...s, glyph: '🍎' })),
-    ...generateCanopySlots(p, 907, extraDone).map(s => ({ ...s, glyph: '🌸' })),
-  ].map(s => `<span class="pdt-tree-decor-item" style="left:${s.x}%;top:${s.y}%;">${s.glyph}</span>`).join('');
+    ...generateCanopySlots(p, 401, coreDone).map(s => ({ ...s, cls: 'pdt-tree-decor-apple', src: 'img/apple.png', alt: 'Apfel' })),
+    ...generateCanopySlots(p, 907, extraDone).map(s => ({ ...s, cls: 'pdt-tree-decor-flower', src: 'img/flower.png', alt: 'Apfelblüte' })),
+  ].map(s => `<img class="pdt-tree-decor-item ${s.cls}" src="${s.src}" alt="${s.alt}" draggable="false" style="left:${s.x}%;top:${s.y}%;" />`).join('');
 
   treeContainer.innerHTML = `
     <div class="pdt-tree-wrap">

@@ -3,7 +3,7 @@
 // =========================
 // Datenstruktur:
 // projects = [{
-//   id, name, description, color, createdAt, startDate, archived,
+//   id, name, description, priority, dueDate, createdAt, startDate, updatedAt, archived,
 //   tasks: [{ id, text, done, isExtra, completedAt }],
 //   subprojects: [{ id, title, collapsed, tasks: [...] }]
 // }]
@@ -89,6 +89,44 @@ function formatStartDate(project) {
   const m = (date.getMonth() + 1).toString().padStart(2, '0');
   const y = date.getFullYear();
   return `Gestartet am ${d}.${m}.${y}`;
+}
+
+// Formatiert das Fälligkeitsdatum inkl. Resttage/Überfällig-Hinweis.
+// Gibt null zurück, wenn kein dueDate gesetzt ist (Feld bleibt dann in der
+// Infokarte versteckt, siehe renderProjectDetail() in forest.js).
+function formatDueDate(project) {
+  if (!project.dueDate) return null;
+  const date = new Date(project.dueDate);
+  const d = date.getDate().toString().padStart(2, '0');
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const y = date.getFullYear();
+  const dateStr = `${d}.${m}.${y}`;
+  if (project.archived) return { text: dateStr, overdue: false };
+
+  const now = new Date();
+  const diffDays = Math.ceil((date - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0)  return { text: `Überfällig seit ${Math.abs(diffDays)} Tag${Math.abs(diffDays) === 1 ? '' : 'en'} (${dateStr})`, overdue: true };
+  if (diffDays === 0) return { text: `Heute fällig (${dateStr})`, overdue: false };
+  if (diffDays === 1) return { text: `Morgen fällig (${dateStr})`, overdue: false };
+  return { text: `Fällig am ${dateStr}`, overdue: false };
+}
+
+// Datumsfeld (<input type="date"> liefert "YYYY-MM-DD") <-> Timestamp, immer
+// in lokaler Zeit statt UTC (new Date("YYYY-MM-DD") parst als UTC-Mitternacht,
+// was je nach Zeitzone einen Tag verrutschen lässt — sowohl beim Zurückschreiben
+// ins Feld als auch bei Tage-Differenzen wie "Überfällig seit X Tagen").
+function dateInputToTimestamp(val) {
+  if (!val) return null;
+  const [y, m, d] = val.split('-').map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+function timestampToDateInput(ts) {
+  if (!ts) return '';
+  const d  = new Date(ts);
+  const y  = d.getFullYear();
+  const m  = (d.getMonth() + 1).toString().padStart(2, '0');
+  const dd = d.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 
 // =========================
@@ -259,13 +297,13 @@ function openProjectModal(existing = null) {
   document.getElementById('project-modal-name').value = existing ? existing.name : '';
   document.getElementById('project-modal-desc').value = existing ? (existing.description || '') : '';
 
+  // Startdatum
+  const startInput = document.getElementById('project-modal-startdate');
+  if (startInput) startInput.value = existing ? timestampToDateInput(existing.startDate) : '';
+
   // Fälligkeit
   const dueInput = document.getElementById('project-modal-due');
-  if (dueInput) {
-    dueInput.value = (existing && existing.dueDate)
-      ? new Date(existing.dueDate).toISOString().slice(0, 10)
-      : '';
-  }
+  if (dueInput) dueInput.value = existing ? timestampToDateInput(existing.dueDate) : '';
 
   // Priorität Buttons
   ['low','mid','high'].forEach(k => {
@@ -310,16 +348,21 @@ document.getElementById('project-modal-save').addEventListener('click', () => {
   const name = document.getElementById('project-modal-name').value.trim();
   if (!name) return;
   const description = document.getElementById('project-modal-desc').value.trim();
-  const dueVal  = document.getElementById('project-modal-due') ? document.getElementById('project-modal-due').value : '';
-  const dueDate = dueVal ? new Date(dueVal).getTime() : null;
+  const startVal  = document.getElementById('project-modal-startdate') ? document.getElementById('project-modal-startdate').value : '';
+  const dueVal    = document.getElementById('project-modal-due') ? document.getElementById('project-modal-due').value : '';
+  const dueDate   = dateInputToTimestamp(dueVal);
   const now = Date.now();
 
   if (editingProject) {
     const idx = projects.findIndex(p => p.id === editingProject.id);
     if (idx !== -1) {
+      // Leeres Startdatum-Feld setzt nicht auf "kein Datum" zurück, sondern auf
+      // das Erstellungsdatum — formatStartDate() fällt ohnehin darauf zurück,
+      // sobald project.startDate leer ist.
       projects[idx].name        = name;
       projects[idx].description = description;
       projects[idx].priority    = selectedPriority;
+      projects[idx].startDate   = dateInputToTimestamp(startVal) || projects[idx].createdAt || now;
       projects[idx].dueDate     = dueDate;
       projects[idx].updatedAt   = now;
     }
@@ -331,7 +374,7 @@ document.getElementById('project-modal-save').addEventListener('click', () => {
       priority:    selectedPriority,
       dueDate,
       createdAt:   now,
-      startDate:   now,
+      startDate:   dateInputToTimestamp(startVal) || now,
       updatedAt:   now,
       archived:    false,
       tasks:       [],

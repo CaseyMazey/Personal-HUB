@@ -402,6 +402,20 @@ function renderProjectDetail() {
   document.getElementById('proj-detail-sub-count').textContent  = `${p.subprojects.length} Unterprojekte`;
   document.getElementById('proj-detail-startdate').textContent  = formatStartDate(p) || '—';
 
+  // Fälligkeitsdatum — Infokarten-Zeile bleibt versteckt, solange keins gesetzt ist
+  const dueRow = document.getElementById('proj-detail-due-row');
+  const dueVal = document.getElementById('proj-detail-due-val');
+  const due    = formatDueDate(p);
+  if (dueRow && dueVal) {
+    if (due) {
+      dueRow.style.display = '';
+      dueVal.textContent   = due.text;
+      dueVal.style.color   = due.overdue ? 'var(--prio-1)' : '';
+    } else {
+      dueRow.style.display = 'none';
+    }
+  }
+
   // Neue Felder
   const statusValEl = document.getElementById('proj-detail-status-val');
   if (statusValEl) { statusValEl.textContent = p.archived ? 'Archiviert' : 'Aktiv'; statusValEl.style.color = p.archived ? '#d97706' : '#16a34a'; }

@@ -1,6 +1,6 @@
 # Projects.md
 
-Version: 1.1
+Version: 1.2
 
 ---
 
@@ -49,50 +49,18 @@ Fortschritt soll sichtbar werden, ohne Druck zu erzeugen.
 
 # Hauptbereiche
 
-Projects besteht aus vier Bereichen:
+Projects besteht aus drei Bereichen:
 
-1. Projektübersicht
+1. Projektwald (Übersicht — siehe eigener Abschnitt weiter unten)
 2. Projektdetailseite
-3. Projektwald
-4. Archiv
+3. Archiv
+
+Eine separate Kartenübersicht existiert nicht mehr — der Projektwald ist die
+einzige Übersichtsansicht. Tabs (Alle/Aktiv/Abgeschlossen) zeigen die
+jeweilige Projektanzahl direkt im Tab-Label an; eine eigene
+Statistik-Leiste mit Gesamtfortschritt gibt es aktuell nicht.
 
 Diese Struktur soll erhalten bleiben.
-
----
-
-# Projektübersicht
-
-Die Standardansicht zeigt alle aktiven Projekte als Karten.
-
-Jede Projektkarte enthält:
-
-- Name
-- Beschreibung
-- Farbe
-- Fortschritt
-- Startdatum
-- offene Aufgaben
-- Kernaufgaben
-- Extras
-- Unterprojekte
-
-Projektkarten können ein- und ausgeklappt werden.
-
-Im eingeklappten Zustand werden nur die wichtigsten Informationen angezeigt.
-
----
-
-# Projektstatistik
-
-Oberhalb der Projektliste befindet sich eine kompakte Statistik.
-
-Sie zeigt:
-
-- aktive Projekte
-- archivierte Projekte
-- Gesamtfortschritt aller aktiven Projekte
-
-Die Statistik dient ausschließlich als Überblick.
 
 ---
 
@@ -106,7 +74,6 @@ Ein Projekt besitzt mindestens:
 Optional:
 
 - Beschreibung
-- Farbe
 - Priorität
 - Fälligkeitsdatum
 
@@ -252,10 +219,9 @@ Die Landschaft dient ausschließlich der Atmosphäre.
 Die Informationskarte zeigt unter anderem:
 
 - Status
-- Priorität
 - Startdatum
 - Fälligkeitsdatum
-- Projektfarbe
+- Unterprojekte
 
 Weitere Informationen können später ergänzt werden.
 
@@ -283,15 +249,11 @@ Jeder Bereich besitzt:
 
 # Projektwald
 
-Der Projektwald ist eine alternative Ansicht.
+Der Projektwald ist die einzige Übersichtsansicht (siehe Hauptbereiche oben).
 
 Er visualisiert jedes Projekt als Baum vor einer illustrierten Waldlandschaft (`img/forest.png`).
 
-Der Projektwald dient ausschließlich der Visualisierung.
-
-Er ersetzt nicht die normale Projektübersicht.
-
-Implementiert in `forest.js` (Projektwald-Ansicht, Projektdetailseite) und `project-tree.js` (PNG-Baumvarianten-Zuweisung + Detailbaum-Rendering) — nicht in `projects.js`, das nur die Kartenübersicht rendert.
+Implementiert in `forest.js` (Projektwald-Ansicht, Projektdetailseite) und `project-tree.js` (PNG-Baumvarianten-Zuweisung + Detailbaum-Rendering) — `projects.js` selbst rendert keine Übersicht mehr, siehe Zuständigkeiten unten.
 
 Die Wald-Übersicht hat keinen gemeinsamen Hintergrundbalken mehr: Tabs (Alle/Aktiv/Abgeschlossen — Abgeschlossen = archivierte Projekte), Suchfeld und Prioritäts-Filter-Button sind einzelne, schwebende Glas-Pills direkt über der Landschaft (`.forest-toolbar` ist nur noch ein transparenter Layout-Wrapper). Diese Filter beeinflussen nur, welche Bäume angezeigt werden — Archivstatus, Suche & Filter sind reine Anzeigefilter der Waldansicht und verändern keine Projektdaten. Die Bäume stehen in vier festen Tiefenreihen (3/4/3/4, hinterste bis vorderste Reihe, `FOREST_ROW_COUNTS`/`generateForestSlots()`): Reihe bestimmt zuerst die Position (zentriert, mit der Tiefe wachsender Baumabstand), erst danach wird die Größe aus der Tiefe abgeleitet (hinten kleiner & enger, vorne größer & mit deutlich mehr Abstand) — keine Zufallspositionen. Unter jedem Baum sitzt eine schlichte Karte (Statuspunkt, Name, Fortschrittsbalken, Prozentwert) — ohne Äpfel/Blüten, die bleiben der Projektdetailseite vorbehalten. Die Legende unten zeigt nur noch Aktives/Abgeschlossenes Projekt + Hover-Hinweis, passt sich in der Breite an ihren Inhalt an und beansprucht nicht mehr die volle Breite.
 
@@ -360,19 +322,6 @@ Dadurch kann die Projektstruktur jederzeit angepasst werden.
 
 ---
 
-# Farben
-
-Jedes Projekt besitzt eine eigene Akzentfarbe.
-
-Sie beeinflusst unter anderem:
-
-- Fortschrittsbalken
-- Checkboxen
-- Projektkarten
-- Baumdarstellung
-
----
-
 # Speicherung
 
 Projects speichert unter anderem:
@@ -385,7 +334,6 @@ Projects speichert unter anderem:
 - Priorität
 - Fälligkeitsdatum
 - Änderungsdatum
-- eingeklappte Projektkarten
 
 Alle Daten werden lokal gespeichert.
 
@@ -395,7 +343,7 @@ Alle Daten werden lokal gespeichert.
 
 Der Bereich ist auf drei Dateien aufgeteilt:
 
-- **projects.js** — Kartenübersicht, Projektverwaltung, Aufgabenverwaltung, Unterprojekte, Fortschrittsberechnung, Archiv, Projektstatistik, Modalfenster, Inline-Bearbeitung, Verschieben von Aufgaben
+- **projects.js** — Projektverwaltung, Aufgabenverwaltung, Unterprojekte, Fortschrittsberechnung, Archiv, Modalfenster (Projekt/Aufgabe/Unterprojekt/Verschieben), Inline-Bearbeitung. `renderProjects()` ist hier nur noch ein Dispatch auf `renderForest()` (forest.js) — keine eigene Kartenübersicht mehr.
 - **forest.js** — Projektwald-Ansicht (Landschaft, Baum-Positionen, Tabs/Suche/Filter, Legende) und Projektdetailseite (Hero, Informationskarte, Aufgabenbereich)
 - **project-tree.js** — PNG-Baumvarianten-Zuweisung (`getOrAssignTreeVariant`, gemeinsam für Waldübersicht + Detailseite) und Detailbaum-Rendering (`updateDetailTreeElements`, PNG + Apfel/Blüten-Deko), von forest.js verwendet
 
